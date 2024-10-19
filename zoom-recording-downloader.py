@@ -68,6 +68,10 @@ API_ENDPOINT_USER_LIST = "https://api.zoom.us/v2/users"
 INCLUDED_USER_EMAILS = config("Include", "emails")
 EXCLUDED_MEETING_TOPICS = config("Exclude", "topics")
 RECORDING_FILE_INCOMPLETE = "incomplete"
+BEHAVIOUR_MODE_DOWNLOAD = "download"
+BEHAVIOUR_MODE_SIZE = "size"
+BEHAVIOUR_MODE = config("Behaviour", "mode", BEHAVIOUR_MODE_DOWNLOAD)
+BEHAVIOUR_MODE_ACTION = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD else "Sizing"
 
 RECORDING_START_YEAR = config("Recordings", "start_year", datetime.date.today().year)
 RECORDING_START_MONTH = config("Recordings", "start_month", 1)
@@ -80,6 +84,7 @@ MEETING_TIMEZONE = ZoneInfo(config("Recordings", "timezone", 'UTC'))
 MEETING_STRFTIME = config("Recordings", "strftime", '%Y.%m.%d - %I.%M %p UTC')
 MEETING_FILENAME = config("Recordings", "filename", '{meeting_time} - {topic} - {rec_type} - {recording_id}.{file_extension}')
 MEETING_FOLDER = config("Recordings", "folder", '{topic} - {meeting_time}')
+
 
 def load_access_token():
     """ OAuth function, thanks to https://github.com/freelimiter
@@ -108,6 +113,7 @@ def load_access_token():
 
     except KeyError:
         print(f"{Color.RED}### The key 'access_token' wasn't found.{Color.END}")
+
 
 def get_users():
     """ loop through pages and return all users
@@ -146,6 +152,7 @@ def get_users():
 
     return all_users
 
+
 def format_filename(params):
     file_extension = params["file_extension"].lower()
     recording = params["recording"]
@@ -165,6 +172,7 @@ def format_filename(params):
     filename = MEETING_FILENAME.format(**locals()).replace(" ", "-")
     folder = MEETING_FOLDER.format(**locals()).replace(" ", "-")
     return (filename, folder)
+
 
 def make_download_info_for(meeting):
     if not meeting.get("recording_files"):
@@ -190,6 +198,7 @@ def make_download_info_for(meeting):
 
     return download_info
 
+
 def make_postdata_for_recordings(email, page_size, rec_start_date, rec_end_date):
     return {
         "userId": email,
@@ -198,6 +207,7 @@ def make_postdata_for_recordings(email, page_size, rec_start_date, rec_end_date)
         "to": rec_end_date
     }
 
+
 def per_delta(start, end, delta):
     """ Generator used to create deltas for recording start and end dates
     """
@@ -205,6 +215,7 @@ def per_delta(start, end, delta):
     while curr < end:
         yield curr, min(curr + delta, end)
         curr += delta
+
 
 def get_meetings_for(user_id):
     """ Start date now split into YEAR, MONTH, and DAY variables (Within 6 month range)
@@ -227,6 +238,7 @@ def get_meetings_for(user_id):
         recordings.extend(recordings_data["meetings"])
 
     return recordings
+
 
 def download_recording(download_url, email, filename, folder_name, recording_size):
     dl_dir = os.sep.join([DOWNLOAD_DIRECTORY, folder_name])
@@ -281,12 +293,14 @@ def download_recording(download_url, email, filename, folder_name, recording_siz
 
         return False
 
+
 def handle_graceful_shutdown(signal_received, frame):
     print(f"\n{Color.DARK_CYAN}SIGINT or CTRL-C detected. system.exiting gracefully.{Color.END}")
 
     system.exit(0)
 
-def get_target_user_emails_from_config(users):
+
+def get_included_user_emails_from_config(users):
     for email, user_id, first_name, last_name in users:
         if INCLUDED_USER_EMAILS == email:
             return True
@@ -328,6 +342,7 @@ def main():
     if len(INCLUDED_USER_EMAILS) != 0:
         print(f"Will only download meeting recordings for the following user(s): {INCLUDED_USER_EMAILS}")
 
+    total_bytes = 0
     for email, user_id, first_name, last_name in users:
 
         if len(INCLUDED_USER_EMAILS) > 0 and email not in INCLUDED_USER_EMAILS:
@@ -337,21 +352,25 @@ def main():
             f"{first_name} {last_name} - {email}" if first_name and last_name else f"{email}"
         )
 
-        print(f"{Color.BOLD}Getting list of meetings for [{user_info}{Color.END}]...")
+        print(f"\n{Color.BOLD}{Color.DARK_CYAN}================================================================{Color.END}")
+        print(f"{Color.BOLD}{Color.DARK_CYAN}Getting list of meetings for [{user_info}]...{Color.END}")
+        print(f"{Color.BOLD}{Color.DARK_CYAN}================================================================{Color.END}")
         meetings = get_meetings_for(user_id)
-        total_count = len(meetings)
-        print(f"Found {total_count} meeting(s)")
+        total_meetings = len(meetings)
+        print(f"Found {total_meetings} meeting(s)")
+
 
         for index, meeting in enumerate(meetings):
             success = False
             meeting_id = meeting["uuid"]
             meeting_topic = meeting.get("topic")
+            meeting_time = meeting.get("start_time")
 
             if meeting_topic in EXCLUDED_MEETING_TOPICS:
-                print(f"==> Excluding meeting {index+1} of {total_count}: {meeting_topic} ({meeting_id})")
+                print(f"==> Excluding meeting {index+1} of {total_meetings}: {meeting_topic} ({meeting_time})")
                 continue
 
-            print(f"{Color.BOLD}Downloading recordings for meeting ({index+1} of {total_count}): {meeting_topic} ({meeting_id}){Color.END}")
+            print(f"{Color.BOLD}{BEHAVIOUR_MODE_ACTION} recordings for meeting ({index+1} of {total_meetings}): {meeting_topic} ({meeting_time}){Color.END}")
             try:
                 meeting_download_info = make_download_info_for(meeting)
             except Exception:
@@ -384,11 +403,13 @@ def main():
                     # truncate URL to 64 characters
                     truncated_url = download_url[0:64] + "..."
                     print(
-                        f"==> Downloading file ({file_number} of {num_files}) as '{recording_type}':"
+                        f"==> {BEHAVIOUR_MODE_ACTION} file ({file_number} of {num_files}) as '{recording_type}':"
                     )
-
-                    success |= download_recording(download_url, email, filename, folder_name, recording_size)
-
+                    if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
+                        success |= download_recording(download_url, email, filename, folder_name, recording_size)
+                    else:
+                        total_bytes += recording_size
+                        success = True
                 else:
                     print(
                         f"{Color.RED}### Recording file is incomplete!{Color.END}"
@@ -407,16 +428,26 @@ def main():
                 #         log.flush()
 
     print(f"\n{Color.BOLD}{Color.GREEN}*** All done! ***{Color.END}")
-    save_location = os.path.abspath(DOWNLOAD_DIRECTORY)
-    print(
-        f"\n{Color.BLUE}Recordings have been saved to: {Color.UNDERLINE}{save_location}"
-        f"{Color.END}\n"
-    )
+    if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
+        save_location = os.path.abspath(DOWNLOAD_DIRECTORY)
+        print(
+            f"\n{Color.BLUE}Recordings have been saved to: {Color.UNDERLINE}{save_location}"
+            f"{Color.END}\n"
+        )
+    else:
+        total_mb = total_bytes / (1024*1024)
+        total_gb = total_mb / 1024
+        print(
+            f"\n{Color.BLUE}Total size of the recordings that could be downloaded:{Color.END}\n"
+            f"{total_gb} GB\n"
+            f"{total_mb} MB\n"
+            f"{total_bytes} bytes"
+        )
+
 
 def splash_screen():
     print(f"""
         {Color.DARK_CYAN}
-
                              ,*****************.
                           *************************
                         *****************************
@@ -435,7 +466,6 @@ def splash_screen():
                         Zoom Recording Downloader
 
                             Version {APP_VERSION}
-
         {Color.END}
     """)
 

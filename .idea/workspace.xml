@@ -5,7 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b7e92801-327b-4ec2-b7d7-69c5ac20225e" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/zoom-recording-downloader.conf.bak" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/zoom-recording-downloader.py" beforeDir="false" afterPath="$PROJECT_DIR$/zoom-recording-downloader.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -15,6 +17,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "daffinm"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/daffinm/zoom-recording-downloader.git",
+    "accountId": "4b0c1a08-02f3-4aff-b4cc-00c20d30680f"
+  }
+}]]></component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
   &quot;associatedIndex&quot;: 0
@@ -28,7 +42,8 @@
   "keyToString": {
     "Python.zoom-recording-downloader.executor": "Run",
     "git-widget-placeholder": "ksprecordings",
-    "settings.editor.selected.configurable": "preferences.lookFeel"
+    "last_opened_file_path": "/home/miles/Dev/github/Zoom/zoom-recording-downloader",
+    "settings.editor.selected.configurable": "vcs.Git"
   },
   "keyToStringList": {
     "com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File": [
@@ -37,6 +52,9 @@
   }
 }]]></component>
   <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/ksp" />
     </key>
@@ -109,5 +127,16 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/zoom-recording-downloader.py</url>
+          <line>365</line>
+          <option name="timeStamp" value="18" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>
