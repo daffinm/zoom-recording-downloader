@@ -15,9 +15,11 @@ import base64
 import datetime
 import json
 import os
+import pathlib
 import re as regex
 import signal
 import sys as system
+from pydoc_data.topics import topics
 
 # installed libraries
 import dateutil.parser as parser
@@ -25,6 +27,9 @@ import pathvalidate as path_validate
 import requests
 import tqdm as progress_bar
 from zoneinfo import ZoneInfo
+
+from requests.compat import numeric_types
+
 
 class Color:
     PURPLE = "\033[95m"
@@ -56,9 +61,13 @@ ACCOUNT_ID = config("OAuth", "account_id", LookupError)
 CLIENT_ID = config("OAuth", "client_id", LookupError)
 CLIENT_SECRET = config("OAuth", "client_secret", LookupError)
 
-APP_VERSION = "3.0 (OAuth)"
+APP_VERSION = "3.1 (OAuth)"
 
 API_ENDPOINT_USER_LIST = "https://api.zoom.us/v2/users"
+
+INCLUDED_USER_EMAILS = config("Include", "emails")
+EXCLUDED_MEETING_TOPICS = config("Exclude", "topics")
+RECORDING_FILE_INCOMPLETE = "incomplete"
 
 RECORDING_START_YEAR = config("Recordings", "start_year", datetime.date.today().year)
 RECORDING_START_MONTH = config("Recordings", "start_month", 1)
@@ -66,14 +75,11 @@ RECORDING_START_DAY = config("Recordings", "start_day", 1)
 RECORDING_START_DATE = parser.parse(config("Recordings", "start_date", f"{RECORDING_START_YEAR}-{RECORDING_START_MONTH}-{RECORDING_START_DAY}"))
 RECORDING_END_DATE = parser.parse(config("Recordings", "end_date", str(datetime.date.today())))
 DOWNLOAD_DIRECTORY = config("Storage", "download_dir", 'downloads')
-COMPLETED_MEETING_IDS_LOG = config("Storage", "completed_log", 'completed-downloads.log')
-COMPLETED_MEETING_IDS = set()
 
 MEETING_TIMEZONE = ZoneInfo(config("Recordings", "timezone", 'UTC'))
 MEETING_STRFTIME = config("Recordings", "strftime", '%Y.%m.%d - %I.%M %p UTC')
 MEETING_FILENAME = config("Recordings", "filename", '{meeting_time} - {topic} - {rec_type} - {recording_id}.{file_extension}')
 MEETING_FOLDER = config("Recordings", "folder", '{topic} - {meeting_time}')
-
 
 def load_access_token():
     """ OAuth function, thanks to https://github.com/freelimiter
@@ -102,7 +108,6 @@ def load_access_token():
 
     except KeyError:
         print(f"{Color.RED}### The key 'access_token' wasn't found.{Color.END}")
-
 
 def get_users():
     """ loop through pages and return all users
@@ -141,7 +146,6 @@ def get_users():
 
     return all_users
 
-
 def format_filename(params):
     file_extension = params["file_extension"].lower()
     recording = params["recording"]
@@ -158,43 +162,41 @@ def format_filename(params):
     day = meeting_time_local.strftime("%d")
     meeting_time = meeting_time_local.strftime(MEETING_STRFTIME)
 
-    filename = MEETING_FILENAME.format(**locals())
-    folder = MEETING_FOLDER.format(**locals())
+    filename = MEETING_FILENAME.format(**locals()).replace(" ", "-")
+    folder = MEETING_FOLDER.format(**locals()).replace(" ", "-")
     return (filename, folder)
 
+def make_download_info_for(meeting):
+    if not meeting.get("recording_files"):
+        raise Exception("No recording files specified")
 
-def get_downloads(recording):
-    if not recording.get("recording_files"):
-        raise Exception
-
-    downloads = []
-    for download in recording["recording_files"]:
-        file_type = download["file_type"]
-        file_extension = download["file_extension"]
-        recording_id = download["id"]
+    download_info = []
+    for recording_file in meeting["recording_files"]:
+        file_type = recording_file["file_type"]
+        file_extension = recording_file["file_extension"]
+        recording_id = recording_file["id"]
+        recording_size = recording_file["file_size"]
 
         if file_type == "":
-            recording_type = "incomplete"
+            recording_type = RECORDING_FILE_INCOMPLETE
         elif file_type != "TIMELINE":
-            recording_type = download["recording_type"]
+            recording_type = recording_file["recording_type"]
         else:
-            recording_type = download["file_type"]
+            recording_type = recording_file["file_type"]
 
         # must append access token to download_url
-        download_url = f"{download['download_url']}?access_token={ACCESS_TOKEN}"
-        downloads.append((file_type, file_extension, download_url, recording_type, recording_id))
+        download_url = f"{recording_file['download_url']}?access_token={ACCESS_TOKEN}"
+        download_info.append((file_type, file_extension, download_url, recording_type, recording_id, recording_size))
 
-    return downloads
+    return download_info
 
-
-def get_recordings(email, page_size, rec_start_date, rec_end_date):
+def make_postdata_for_recordings(email, page_size, rec_start_date, rec_end_date):
     return {
         "userId": email,
         "page_size": page_size,
         "from": rec_start_date,
         "to": rec_end_date
     }
-
 
 def per_delta(start, end, delta):
     """ Generator used to create deltas for recording start and end dates
@@ -204,8 +206,7 @@ def per_delta(start, end, delta):
         yield curr, min(curr + delta, end)
         curr += delta
 
-
-def list_recordings(email):
+def get_meetings_for(user_id):
     """ Start date now split into YEAR, MONTH, and DAY variables (Within 6 month range)
         then get recordings within that range
     """
@@ -216,9 +217,9 @@ def list_recordings(email):
         RECORDING_END_DATE,
         datetime.timedelta(days=30)
     ):
-        post_data = get_recordings(email, 300, start, end)
+        post_data = make_postdata_for_recordings(user_id, 300, start, end)
         response = requests.get(
-            url=f"https://api.zoom.us/v2/users/{email}/recordings",
+            url=f"https://api.zoom.us/v2/users/{user_id}/recordings",
             headers=AUTHORIZATION_HEADER,
             params=post_data
         )
@@ -227,8 +228,7 @@ def list_recordings(email):
 
     return recordings
 
-
-def download_recording(download_url, email, filename, folder_name):
+def download_recording(download_url, email, filename, folder_name, recording_size):
     dl_dir = os.sep.join([DOWNLOAD_DIRECTORY, folder_name])
     sanitized_download_dir = path_validate.sanitize_filepath(dl_dir)
     sanitized_filename = path_validate.sanitize_filename(filename)
@@ -236,20 +236,40 @@ def download_recording(download_url, email, filename, folder_name):
 
     os.makedirs(sanitized_download_dir, exist_ok=True)
 
+    print(f"Destination file: {full_filename} ({recording_size} bytes)")
+
+    # Check to see if we have already downloaded this file, and if it is complete.
+    downloaded_file_size = 0
+    if os.path.exists(full_filename):
+        # print(f"Download file already exists: {full_filename}")
+        downloaded_file_size = os.path.getsize(full_filename)
+        if downloaded_file_size == recording_size:
+            print(f"Recording file has already been downloaded successfully :)")
+            return True
+
+    # Download recording file.
     response = requests.get(download_url, stream=True)
 
     # total size in bytes.
-    total_size = int(response.headers.get("content-length", 0))
+    content_length = int(response.headers.get("content-length", 0))
     block_size = 32 * 1024  # 32 Kibibytes
 
+    if content_length != recording_size:
+        print(f"{Color.RED}Content length of recording file ({content_length}) != reported size ({recording_size}){Color.END}")
+
     # create TQDM progress bar
-    prog_bar = progress_bar.tqdm(total=total_size, unit="iB", unit_scale=True)
+    prog_bar = progress_bar.tqdm(total=content_length, unit="iB", unit_scale=True)
     try:
         with open(full_filename, "wb") as fd:
             for chunk in response.iter_content(block_size):
                 prog_bar.update(len(chunk))
                 fd.write(chunk)  # write video chunk to disk
         prog_bar.close()
+
+        # Check that downloaded file is complete. e.g. Rate limiting may mean we did not actually get all of it.
+        downloaded_file_size = os.path.getsize(full_filename)
+        if downloaded_file_size != content_length:
+            return False
 
         return True
 
@@ -261,37 +281,141 @@ def download_recording(download_url, email, filename, folder_name):
 
         return False
 
-
-def load_completed_meeting_ids():
-    try:
-        with open(COMPLETED_MEETING_IDS_LOG, 'r') as fd:
-            [COMPLETED_MEETING_IDS.add(line.strip()) for line in fd]
-
-    except FileNotFoundError:
-        print(
-            f"{Color.DARK_CYAN}Log file not found. Creating new log file: {Color.END}"
-            f"{COMPLETED_MEETING_IDS_LOG}\n"
-        )
-
-
 def handle_graceful_shutdown(signal_received, frame):
     print(f"\n{Color.DARK_CYAN}SIGINT or CTRL-C detected. system.exiting gracefully.{Color.END}")
 
     system.exit(0)
 
+def get_target_user_emails_from_config(users):
+    for email, user_id, first_name, last_name in users:
+        if INCLUDED_USER_EMAILS == email:
+            return True
+    return False
 
-# ################################################################
-# #                        MAIN                                  #
-# ################################################################
+# ######################################################################################################################
+# #                                             MAIN                                                                   #
+# ######################################################################################################################
+
+def check_target_emails_found_in_users(users):
+    if len(INCLUDED_USER_EMAILS) == 0:
+        return
+    found = 0
+    print(f"Checking account users for included user emails: {INCLUDED_USER_EMAILS}")
+    for email, user_id, first_name, last_name in users:
+        if email in INCLUDED_USER_EMAILS:
+            found += 1
+
+    if found != len(INCLUDED_USER_EMAILS):
+        print(f"{Color.RED}### Cannot find all target users! Please check your config and try again.")
+        exit(1)
+
 
 def main():
     # clear the screen buffer
     os.system('cls' if os.name == 'nt' else 'clear')
 
-    # show the logo
+    splash_screen()
+
+    print(f"{Color.BOLD}Loading access token...{Color.END}")
+    load_access_token()
+
+    print(f"{Color.BOLD}Getting user accounts...{Color.END}")
+    users = get_users()
+    print(f"Got {len(users)} user accounts: {users}" )
+
+    check_target_emails_found_in_users(users)
+
+    if len(INCLUDED_USER_EMAILS) != 0:
+        print(f"Will only download meeting recordings for the following user(s): {INCLUDED_USER_EMAILS}")
+
+    for email, user_id, first_name, last_name in users:
+
+        if len(INCLUDED_USER_EMAILS) > 0 and email not in INCLUDED_USER_EMAILS:
+            continue
+
+        user_info = (
+            f"{first_name} {last_name} - {email}" if first_name and last_name else f"{email}"
+        )
+
+        print(f"{Color.BOLD}Getting list of meetings for [{user_info}{Color.END}]...")
+        meetings = get_meetings_for(user_id)
+        total_count = len(meetings)
+        print(f"Found {total_count} meeting(s)")
+
+        for index, meeting in enumerate(meetings):
+            success = False
+            meeting_id = meeting["uuid"]
+            meeting_topic = meeting.get("topic")
+
+            if meeting_topic in EXCLUDED_MEETING_TOPICS:
+                print(f"==> Excluding meeting {index+1} of {total_count}: {meeting_topic} ({meeting_id})")
+                continue
+
+            print(f"{Color.BOLD}Downloading recordings for meeting ({index+1} of {total_count}): {meeting_topic} ({meeting_id}){Color.END}")
+            try:
+                meeting_download_info = make_download_info_for(meeting)
+            except Exception:
+                print(
+                    f"{Color.RED}### Recording files missing for meeting: {Color.END}"
+                    f"-- Topic: {meeting_topic}\n"
+                    f"-- ID: {meeting_id}'\n"
+                )
+                continue
+
+            num_files = len(meeting_download_info)
+            print(f"Found {num_files} files for this meeting.")
+
+            # Get the recording files for this meeting.
+            file_number = 0
+            for file_type, file_extension, download_url, recording_type, recording_id, recording_size in meeting_download_info:
+                file_number += 1
+                # Is the recording file online complete or not? Should we download it yet?
+                if recording_type != RECORDING_FILE_INCOMPLETE:
+                    filename, folder_name = (
+                        format_filename({
+                            "file_type": file_type,
+                            "recording": meeting,
+                            "file_extension": file_extension,
+                            "recording_type": recording_type,
+                            "recording_id": recording_id
+                        })
+                    )
+
+                    # truncate URL to 64 characters
+                    truncated_url = download_url[0:64] + "..."
+                    print(
+                        f"==> Downloading file ({file_number} of {num_files}) as '{recording_type}':"
+                    )
+
+                    success |= download_recording(download_url, email, filename, folder_name, recording_size)
+
+                else:
+                    print(
+                        f"{Color.RED}### Recording file is incomplete!{Color.END}"
+                    )
+                    success = False
+
+            if not success:
+                # if successful and it has not already been logged, write the ID of this recording to the completed file
+                f"{Color.RED}### Recording download failed for some reason.{Color.END}"
+
+                # if meeting_id not in COMPLETED_MEETING_IDS:
+                #     with open(COMPLETED_MEETING_IDS_LOG, 'a') as log:
+                #         COMPLETED_MEETING_IDS.add(meeting_id)
+                #         log.write(meeting_id)
+                #         log.write('\n')
+                #         log.flush()
+
+    print(f"\n{Color.BOLD}{Color.GREEN}*** All done! ***{Color.END}")
+    save_location = os.path.abspath(DOWNLOAD_DIRECTORY)
+    print(
+        f"\n{Color.BLUE}Recordings have been saved to: {Color.UNDERLINE}{save_location}"
+        f"{Color.END}\n"
+    )
+
+def splash_screen():
     print(f"""
         {Color.DARK_CYAN}
-
 
                              ,*****************.
                           *************************
@@ -314,83 +438,6 @@ def main():
 
         {Color.END}
     """)
-
-    load_access_token()
-
-    load_completed_meeting_ids()
-
-    print(f"{Color.BOLD}Getting user accounts...{Color.END}")
-    users = get_users()
-
-    for email, user_id, first_name, last_name in users:
-        userInfo = (
-            f"{first_name} {last_name} - {email}" if first_name and last_name else f"{email}"
-        )
-        print(f"\n{Color.BOLD}Getting recording list for {userInfo}{Color.END}")
-
-        recordings = list_recordings(user_id)
-        total_count = len(recordings)
-        print(f"==> Found {total_count} recordings")
-
-        for index, recording in enumerate(recordings):
-            success = False
-            meeting_id = recording["uuid"]
-            if meeting_id in COMPLETED_MEETING_IDS:
-                print(f"==> Skipping already downloaded meeting: {meeting_id}")
-
-                continue
-
-            try:
-                downloads = get_downloads(recording)
-            except Exception:
-                print(
-                    f"{Color.RED}### Recording files missing for call with id {Color.END}"
-                    f"'{recording['id']}'\n"
-                )
-
-                continue
-
-            for file_type, file_extension, download_url, recording_type, recording_id in downloads:
-                if recording_type != 'incomplete':
-                    filename, folder_name = (
-                        format_filename({
-                            "file_type": file_type,
-                            "recording": recording,
-                            "file_extension": file_extension,
-                            "recording_type": recording_type,
-                            "recording_id": recording_id
-                        })
-                    )
-
-                    # truncate URL to 64 characters
-                    truncated_url = download_url[0:64] + "..."
-                    print(
-                        f"==> Downloading ({index + 1} of {total_count}) as {recording_type}: "
-                        f"{recording_id}: {truncated_url}"
-                    )
-                    success |= download_recording(download_url, email, filename, folder_name)
-
-                else:
-                    print(
-                        f"{Color.RED}### Incomplete Recording ({index + 1} of {total_count}) for "
-                        f"recording with id {Color.END}'{recording_id}'"
-                    )
-                    success = False
-
-            if success:
-                # if successful, write the ID of this recording to the completed file
-                with open(COMPLETED_MEETING_IDS_LOG, 'a') as log:
-                    COMPLETED_MEETING_IDS.add(meeting_id)
-                    log.write(meeting_id)
-                    log.write('\n')
-                    log.flush()
-
-    print(f"\n{Color.BOLD}{Color.GREEN}*** All done! ***{Color.END}")
-    save_location = os.path.abspath(DOWNLOAD_DIRECTORY)
-    print(
-        f"\n{Color.BLUE}Recordings have been saved to: {Color.UNDERLINE}{save_location}"
-        f"{Color.END}\n"
-    )
 
 
 if __name__ == "__main__":

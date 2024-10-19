@@ -9,6 +9,18 @@
 		"completed_log": "completed-downloads.log",
 		"download_dir": "downloads"
 	},
+	"Include": {
+	    "emails": [
+	        "target_user@gmail.com",
+	        "target_2@vip.com"
+        ]
+	},
+	"Exclude": {
+	    "topics": [
+            "Ignore This Meeting",
+            "And Don't Bother With This One Either"
+    	]
+	},
 	"Recordings": {
 		"start_year": "2023",
 		"start_month": "1",
