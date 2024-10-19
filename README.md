@@ -23,7 +23,11 @@ _Attention: You will need a [Zoom Developer account](https://marketplace.zoom.us
 
 1. Create a [server-to-server OAuth app](https://marketplace.zoom.us/user/build), set up your app and collect your credentials (`Account ID`, `Client ID`, `Client Secret`). For questions on this, [reference the docs](https://developers.zoom.us/docs/internal-apps/create/) on creating a server-to-server app. Make sure you activate the app. Follow Zoom's [set up documentation](https://marketplace.zoom.us/docs/guides/build/server-to-server-oauth-app/) or [this video](https://www.youtube.com/watch?v=OkBE7CHVzho) for a more complete walk through.
 
-2. Add the necessary scopes to your app. In your app's _Scopes_ tab, add the following scopes: `account:master`, `account:read:admin`, `account:write:admin`, `information_barriers:read:admin`, `information_barriers:read:master`, `information_barriers:write:admin`, `information_barriers:write:master`, `meeting:master`, `meeting:read:admin`, `meeting:read:admin:sip_dialing`, `meeting:write:admin`, `meeting_token:read:admin:live_streaming`, `meeting_token:read:admin:local_archiving`, `meeting_token:read:admin:local_recording`, `recording:master`, `recording:read:admin`, `recording:write:admin`, `user:master`, `user:read:admin`, `user:write:admin`.
+2. Add the necessary scopes in your app's _Scopes_ tab:
+   * View users
+     * `user:read:list_users:admin`
+   * Lists all cloud recordings for a user
+     * `cloud_recording:read:list_user_recordings:admin`
 
 3. Copy **zoom-recording-downloader.conf.template** to a new file named **zoom-recording-downloader.conf** and fill in your Server-to-Server OAuth app credentials:
 ```
@@ -39,13 +43,38 @@ _Attention: You will need a [Zoom Developer account](https://marketplace.zoom.us
 4. You can optionally add other options to the configuration file:
 
 - Specify the base **download_dir** under which the recordings will be downloaded (default is 'downloads')
-- Specify the **completed_log** log file that will store the ID's of downloaded recordings (default is 'completed-downloads.log')
 
 ```
       {
               "Storage": {
-                      "download_dir": "downloads",
-                      "completed_log": "completed-downloads.log"
+                      "download_dir": "downloads"
+              }
+      }
+```
+
+- Specify which user accounts to include. If not specified then recording files from all accounts will be downloaded. 
+
+```
+      {
+              "Include": {
+                      "emails": [
+                              "someoneor@gmail.com",
+                              "another@yahoo.co.uk"
+                      ]
+              }
+      }
+```
+
+- Specify which meeting topics to exclude. Applies to all users. If not specified then recording files from all topics will be downloaded.
+
+```
+      {
+              "Exclude": {
+                      "topics": [
+                              "Topic One",
+                              "Topic 2",
+                              "Etc..."
+                      ]
               }
       }
 ```
