@@ -6,30 +6,28 @@
 	},
 	"_comment": "everything after this is optional",
 	"Storage": {
-		"completed_log": "completed-downloads.log",
 		"download_dir": "downloads"
 	},
-	"Include": {
-	    "emails": [
-	        "target_user@gmail.com",
-	        "target_2@vip.com"
-        ]
-	},
-	"Exclude": {
-	    "topics": [
-            "Ignore This Meeting",
-            "And Don't Bother With This One Either"
-    	]
-	},
 	"Recordings": {
-		"start_year": "2023",
+		"start_year": "2024",
 		"start_month": "1",
 		"start_day": "1",
-		"start_date": "2023-01-01",
-		"end_date": "2023-12-31",
-		"timezone": "America/Vancouver",
-		"strftime": "%Y.%m.%d-%H.%M%z",
-		"filename": "{meeting_time}-{topic}-{rec_type}-{recording_id}.{file_extension}",
-		"folder": "{year}/{month}/{meeting_time}-{topic}"
+		"start_date": "2022-11-01",
+		"end_date": "2024-12-31",
+		"timezone": "GMT",
+		"strftime": "%Y%m%d-%H%M",
+		"folder": "{year}/{topic}",
+		"filename": "EN_{topic}_{meeting_time}.{file_extension}"
+	},
+    "Include": {
+	    "emails": [],
+	    "topics": []
+	},
+	"Exclude": {
+	    "emails": [],
+	    "topics": []
+	},
+	"Behaviour": {
+	    "mode": "download"
 	}
 }
