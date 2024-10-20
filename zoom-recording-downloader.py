@@ -13,22 +13,19 @@
 # system libraries
 import base64
 import datetime
+import fnmatch
 import json
 import os
-import pathlib
 import re as regex
 import signal
 import sys as system
-from pydoc_data.topics import topics
+from zoneinfo import ZoneInfo
 
 # installed libraries
 import dateutil.parser as parser
 import pathvalidate as path_validate
 import requests
 import tqdm as progress_bar
-from zoneinfo import ZoneInfo
-
-from requests.compat import numeric_types
 
 
 class Color:
@@ -65,13 +62,18 @@ APP_VERSION = "3.1 (OAuth)"
 
 API_ENDPOINT_USER_LIST = "https://api.zoom.us/v2/users"
 
-INCLUDED_USER_EMAILS = config("Include", "emails")
-EXCLUDED_MEETING_TOPICS = config("Exclude", "topics")
+INCLUDE_EMAILS = config("Include", "emails")
+INCLUDE_TOPICS = config("Include", "topics")
+EXCLUDE_EMAILS = config("Exclude", "emails")
+EXCLUDE_TOPICS = config("Exclude", "topics")
+
 RECORDING_FILE_INCOMPLETE = "incomplete"
-BEHAVIOUR_MODE_DOWNLOAD = "download"
-BEHAVIOUR_MODE_SIZE = "size"
-BEHAVIOUR_MODE = config("Behaviour", "mode", BEHAVIOUR_MODE_DOWNLOAD)
-BEHAVIOUR_MODE_ACTION = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD else "Sizing"
+BEHAVIOUR_MODES = ["download", "size"]
+BEHAVIOUR_MODE = config("Behaviour", "mode", BEHAVIOUR_MODES[0])
+if BEHAVIOUR_MODE not in BEHAVIOUR_MODES:
+    print(f"{Color.RED}Unknown Behaviour mode: {BEHAVIOUR_MODE}")
+    exit(1)
+BEHAVIOUR_MODE_ACTION = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODES[0] else "Sizing"
 
 RECORDING_START_YEAR = config("Recordings", "start_year", datetime.date.today().year)
 RECORDING_START_MONTH = config("Recordings", "start_month", 1)
@@ -300,30 +302,46 @@ def handle_graceful_shutdown(signal_received, frame):
     system.exit(0)
 
 
-def get_included_user_emails_from_config(users):
-    for email, user_id, first_name, last_name in users:
-        if INCLUDED_USER_EMAILS == email:
+def should_include_user(email):
+    if len(INCLUDE_EMAILS) == 0:
+        # Default == include all
+        return True
+    for pattern in INCLUDE_EMAILS:
+        if fnmatch.fnmatch(email, pattern):
             return True
     return False
+
+def should_exclude_user(email):
+    if len(EXCLUDE_EMAILS) == 0:
+        # Default == exclude none
+        return False
+    for pattern in EXCLUDE_EMAILS:
+        if fnmatch.fnmatch(email, pattern):
+            return True
+    return False
+
+def should_include_topic(topic):
+    if len(INCLUDE_TOPICS) == 0:
+        # Default = include all
+        return True
+    for pattern in INCLUDE_TOPICS:
+        if fnmatch.fnmatch(topic, pattern):
+            return True
+    return False
+
+def should_exclude_topic(topic):
+    if len(EXCLUDE_TOPICS) == 0:
+        # Default == exclude none
+        return False
+    for pattern in EXCLUDE_TOPICS:
+        if fnmatch.fnmatch(topic, pattern):
+            return True
+    return False
+
 
 # ######################################################################################################################
 # #                                             MAIN                                                                   #
 # ######################################################################################################################
-
-def check_target_emails_found_in_users(users):
-    if len(INCLUDED_USER_EMAILS) == 0:
-        return
-    found = 0
-    print(f"Checking account users for included user emails: {INCLUDED_USER_EMAILS}")
-    for email, user_id, first_name, last_name in users:
-        if email in INCLUDED_USER_EMAILS:
-            found += 1
-
-    if found != len(INCLUDED_USER_EMAILS):
-        print(f"{Color.RED}### Cannot find all target users! Please check your config and try again.")
-        exit(1)
-
-
 def main():
     # clear the screen buffer
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -337,20 +355,19 @@ def main():
     users = get_users()
     print(f"Got {len(users)} user accounts: {users}" )
 
-    check_target_emails_found_in_users(users)
-
-    if len(INCLUDED_USER_EMAILS) != 0:
-        print(f"Will only download meeting recordings for the following user(s): {INCLUDED_USER_EMAILS}")
-
     total_bytes = 0
+    # Iterate over users
     for email, user_id, first_name, last_name in users:
-
-        if len(INCLUDED_USER_EMAILS) > 0 and email not in INCLUDED_USER_EMAILS:
-            continue
-
         user_info = (
             f"{first_name} {last_name} - {email}" if first_name and last_name else f"{email}"
         )
+
+        if not should_include_user(email):
+            print(f"{Color.BOLD}==> User is NOT included:{Color.END} {user_info}")
+            continue
+        if should_exclude_user(email):
+            print(f"{Color.BOLD}==> User is excluded:{Color.END} {user_info}")
+            continue
 
         print(f"\n{Color.BOLD}{Color.DARK_CYAN}================================================================{Color.END}")
         print(f"{Color.BOLD}{Color.DARK_CYAN}Getting list of meetings for [{user_info}]...{Color.END}")
@@ -359,15 +376,18 @@ def main():
         total_meetings = len(meetings)
         print(f"Found {total_meetings} meeting(s)")
 
-
+        # Iterate over user's meetings
         for index, meeting in enumerate(meetings):
             success = False
             meeting_id = meeting["uuid"]
             meeting_topic = meeting.get("topic")
             meeting_time = meeting.get("start_time")
 
-            if meeting_topic in EXCLUDED_MEETING_TOPICS:
-                print(f"==> Excluding meeting {index+1} of {total_meetings}: {meeting_topic} ({meeting_time})")
+            if not should_include_topic(meeting_topic):
+                print(f"{Color.BOLD}==> Meeting is NOT included:{Color.END} {meeting_topic}")
+                continue
+            if should_exclude_topic(meeting_topic):
+                print(f"{Color.BOLD}==> Meeting is excluded:{Color.END} {meeting_topic}")
                 continue
 
             print(f"{Color.BOLD}{BEHAVIOUR_MODE_ACTION} recordings for meeting ({index+1} of {total_meetings}): {meeting_topic} ({meeting_time}){Color.END}")
