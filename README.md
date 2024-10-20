@@ -52,33 +52,6 @@ _Attention: You will need a [Zoom Developer account](https://marketplace.zoom.us
       }
 ```
 
-- Specify which user accounts to include. If not specified then recording files from all accounts will be downloaded. 
-
-```
-      {
-              "Include": {
-                      "emails": [
-                              "someoneor@gmail.com",
-                              "another@yahoo.co.uk"
-                      ]
-              }
-      }
-```
-
-- Specify which meeting topics to exclude. Applies to all users. If not specified then recording files from all topics will be downloaded.
-
-```
-      {
-              "Exclude": {
-                      "topics": [
-                              "Topic One",
-                              "Topic 2",
-                              "Etc..."
-                      ]
-              }
-      }
-```
-
 - Specify the **start_date** from which to start downloading meetings (default is Jan 1 of this year)
 - Specify the **end_date** at which to stop downloading meetings (default is today)
 - Dates are specified as YYYY-MM-DD
@@ -142,6 +115,71 @@ For the previous formats you can use the following values
   - **{recording_id}** is the recording id from zoom
   - **{rec_type}** is the type of the recording
   - **{topic}** is the title of the zoom meeting
+
+- **Include and Exclude users and meetings (topics)** 
+- Useful for large organisations and people with lots of meeting recordings.
+- Specify which **users** to **include** using glob patterns if desired. (Default is include all.) 
+
+```
+      {
+              "Include": {
+                      "emails": [
+                              "*@gmail.com",
+                              "somebody@yahoo.co.uk"
+                      ]
+              }
+      }
+```
+
+-Specify which **meeting topics** to **include** using glob patterns if desired. (Default is include all.) 
+
+```
+      {
+              "Include": {
+                      "topics": [
+                              "AGM 20**",
+                              "Monthly Sales Meeting"
+                      ]
+              }
+      }
+```
+ 
+- Specify which **users** to **exclude** using glob patterns if desired. (Default is exclude none.) 
+
+```
+      {
+              "Exclude": {
+                      "emails": [
+                              "*@gmail.com",
+                              "somebody@yahoo.co.uk"
+                      ]
+              }
+      }
+```
+
+- Specify which **meeting topics** to **exclude** using glob patterns if desired. (Default is exclude none.) 
+
+```
+      {
+              "Exclude": {
+                      "topics": [
+                              "AGM 20**",
+                              "Monthly Sales Meeting"
+                      ]
+              }
+      }
+```
+
+- Specify which **mode** to run in: **size** is useful for checking if you have enough disk space. Default is **download**. 
+
+```
+      {
+              "Behaviour": {
+                      "mode": "download|size"
+                      ]
+              }
+      }
+```
 
 5. Run command:
 

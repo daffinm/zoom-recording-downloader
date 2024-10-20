@@ -4,9 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b7e92801-327b-4ec2-b7d7-69c5ac20225e" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/zoom-recording-downloader.conf.bak" afterDir="false" />
+    <list default="true" id="b7e92801-327b-4ec2-b7d7-69c5ac20225e" name="Changes" comment="Added behaviour mode download or size">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/zoom-recording-downloader.py" beforeDir="false" afterPath="$PROJECT_DIR$/zoom-recording-downloader.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -14,21 +14,28 @@
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {
-    "state": "OPEN",
-    "assignee": "daffinm"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;daffinm&quot;
   }
-}]]></component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/daffinm/zoom-recording-downloader.git",
-    "accountId": "4b0c1a08-02f3-4aff-b4cc-00c20d30680f"
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/daffinm/zoom-recording-downloader.git&quot;,
+    &quot;accountId&quot;: &quot;4b0c1a08-02f3-4aff-b4cc-00c20d30680f&quot;
   }
-}]]></component>
+}</component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
   &quot;associatedIndex&quot;: 0
@@ -40,6 +47,7 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Python.test.executor": "Run",
     "Python.zoom-recording-downloader.executor": "Run",
     "git-widget-placeholder": "ksprecordings",
     "last_opened_file_path": "/home/miles/Dev/github/Zoom/zoom-recording-downloader",
@@ -106,6 +114,15 @@
       <updated>1728545350834</updated>
       <workItem from="1728562230714" duration="53000" />
     </task>
+    <task id="LOCAL-00001" summary="Added behaviour mode download or size">
+      <option name="closed" value="true" />
+      <created>1729350079711</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1729350079711</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -128,13 +145,22 @@
       </map>
     </option>
   </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Added behaviour mode download or size" />
+    <option name="LAST_COMMIT_MESSAGE" value="Added behaviour mode download or size" />
+  </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/zoom-recording-downloader.py</url>
-          <line>365</line>
-          <option name="timeStamp" value="18" />
+          <line>355</line>
+          <option name="timeStamp" value="19" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/zoom-recording-downloader.py</url>
+          <line>392</line>
+          <option name="timeStamp" value="20" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
