@@ -68,12 +68,14 @@ EXCLUDE_EMAILS = config("Exclude", "emails")
 EXCLUDE_TOPICS = config("Exclude", "topics")
 
 RECORDING_FILE_INCOMPLETE = "incomplete"
-BEHAVIOUR_MODES = ["download", "size"]
+BEHAVIOUR_MODE_DOWNLOAD = "download"
+BEHAVIOUR_MODE_SIZE = "size"
+BEHAVIOUR_MODES = [BEHAVIOUR_MODE_DOWNLOAD, BEHAVIOUR_MODE_SIZE]
 BEHAVIOUR_MODE = config("Behaviour", "mode", BEHAVIOUR_MODES[0])
 if BEHAVIOUR_MODE not in BEHAVIOUR_MODES:
     print(f"{Color.RED}Unknown Behaviour mode: {BEHAVIOUR_MODE}")
     exit(1)
-BEHAVIOUR_MODE_ACTION = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODES[0] else "Sizing"
+BEHAVIOUR_MODE_VERB = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODES[0] else "Sizing"
 
 RECORDING_START_YEAR = config("Recordings", "start_year", datetime.date.today().year)
 RECORDING_START_MONTH = config("Recordings", "start_month", 1)
@@ -363,14 +365,14 @@ def main():
         )
 
         if not should_include_user(email):
-            print(f"{Color.BOLD}==> User is NOT included:{Color.END} {user_info}")
+            print(f"\n{Color.BOLD}{Color.BLUE}User is NOT included:{Color.END} {user_info}")
             continue
         if should_exclude_user(email):
-            print(f"{Color.BOLD}==> User is excluded:{Color.END} {user_info}")
+            print(f"\n{Color.BOLD}{Color.BLUE}User is excluded:{Color.END} {user_info}")
             continue
 
         print(f"\n{Color.BOLD}{Color.DARK_CYAN}================================================================{Color.END}")
-        print(f"{Color.BOLD}{Color.DARK_CYAN}Getting list of meetings for [{user_info}]...{Color.END}")
+        print(f"{Color.BOLD}{Color.DARK_CYAN}Getting list of meetings for: {user_info}...{Color.END}")
         print(f"{Color.BOLD}{Color.DARK_CYAN}================================================================{Color.END}")
         meetings = get_meetings_for(user_id)
         total_meetings = len(meetings)
@@ -383,14 +385,15 @@ def main():
             meeting_topic = meeting.get("topic")
             meeting_time = meeting.get("start_time")
 
+            print(f"{Color.BOLD}Meeting {index+1} of {total_meetings}: {meeting_topic} ({meeting_time}){Color.END}")
+
             if not should_include_topic(meeting_topic):
-                print(f"{Color.BOLD}==> Meeting is NOT included:{Color.END} {meeting_topic}")
+                print(f"{Color.BLUE}Meeting is NOT included:{Color.END} {meeting_topic}")
                 continue
             if should_exclude_topic(meeting_topic):
-                print(f"{Color.BOLD}==> Meeting is excluded:{Color.END} {meeting_topic}")
+                print(f"{Color.BLUE}Meeting is excluded:{Color.END} {meeting_topic}")
                 continue
 
-            print(f"{Color.BOLD}{BEHAVIOUR_MODE_ACTION} recordings for meeting ({index+1} of {total_meetings}): {meeting_topic} ({meeting_time}){Color.END}")
             try:
                 meeting_download_info = make_download_info_for(meeting)
             except Exception:
@@ -423,7 +426,7 @@ def main():
                     # truncate URL to 64 characters
                     truncated_url = download_url[0:64] + "..."
                     print(
-                        f"==> {BEHAVIOUR_MODE_ACTION} file ({file_number} of {num_files}) as '{recording_type}':"
+                        f"==> {BEHAVIOUR_MODE_VERB} file {file_number} of {num_files}: type {recording_type}"
                     )
                     if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
                         success |= download_recording(download_url, email, filename, folder_name, recording_size)
@@ -437,15 +440,7 @@ def main():
                     success = False
 
             if not success:
-                # if successful and it has not already been logged, write the ID of this recording to the completed file
                 f"{Color.RED}### Recording download failed for some reason.{Color.END}"
-
-                # if meeting_id not in COMPLETED_MEETING_IDS:
-                #     with open(COMPLETED_MEETING_IDS_LOG, 'a') as log:
-                #         COMPLETED_MEETING_IDS.add(meeting_id)
-                #         log.write(meeting_id)
-                #         log.write('\n')
-                #         log.flush()
 
     print(f"\n{Color.BOLD}{Color.GREEN}*** All done! ***{Color.END}")
     if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
