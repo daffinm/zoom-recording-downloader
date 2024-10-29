@@ -17,3 +17,5 @@ __pycache__/*
 zoom-recording-downloader.conf
 
 /.venv/
+/test/media/
+/tmp/

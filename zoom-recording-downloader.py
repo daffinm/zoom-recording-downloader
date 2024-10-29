@@ -13,7 +13,6 @@
 # system libraries
 import base64
 import datetime
-import fnmatch
 import json
 import os
 import re as regex
@@ -173,6 +172,7 @@ def format_filename(params):
     day = meeting_time_local.strftime("%d")
     meeting_time = meeting_time_local.strftime(MEETING_STRFTIME)
 
+    # TODO make any additional file and folder name transformations part of the config.
     filename = MEETING_FILENAME.format(**locals()).replace(" ", "-")
     folder = MEETING_FOLDER.format(**locals()).replace(" ", "-")
     return (filename, folder)
@@ -257,7 +257,6 @@ def download_recording(download_url, email, filename, folder_name, recording_siz
     # Check to see if we have already downloaded this file, and if it is complete.
     downloaded_file_size = 0
     if os.path.exists(full_filename):
-        # print(f"Download file already exists: {full_filename}")
         downloaded_file_size = os.path.getsize(full_filename)
         if downloaded_file_size == recording_size:
             print(f"Recording file has already been downloaded successfully :)")
@@ -309,7 +308,7 @@ def should_include_user(email):
         # Default == include all
         return True
     for pattern in INCLUDE_EMAILS:
-        if fnmatch.fnmatch(email, pattern):
+        if test.fnmatch(email, pattern):
             return True
     return False
 
@@ -318,7 +317,7 @@ def should_exclude_user(email):
         # Default == exclude none
         return False
     for pattern in EXCLUDE_EMAILS:
-        if fnmatch.fnmatch(email, pattern):
+        if test.fnmatch(email, pattern):
             return True
     return False
 
@@ -327,7 +326,7 @@ def should_include_topic(topic):
         # Default = include all
         return True
     for pattern in INCLUDE_TOPICS:
-        if fnmatch.fnmatch(topic, pattern):
+        if test.fnmatch(topic, pattern):
             return True
     return False
 
@@ -336,7 +335,7 @@ def should_exclude_topic(topic):
         # Default == exclude none
         return False
     for pattern in EXCLUDE_TOPICS:
-        if fnmatch.fnmatch(topic, pattern):
+        if test.fnmatch(topic, pattern):
             return True
     return False
 
