@@ -4,15 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b7e92801-327b-4ec2-b7d7-69c5ac20225e" name="Changes" comment="Fixed template">
-      <change afterPath="$PROJECT_DIR$/test/test_fnmatch.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/test/test_mutagen.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tmp/txns.csv" afterDir="false" />
+    <list default="true" id="b7e92801-327b-4ec2-b7d7-69c5ac20225e" name="Changes" comment="Deleted non-project file">
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/zoom-recording-downloader.py" beforeDir="false" afterPath="$PROJECT_DIR$/zoom-recording-downloader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/zoomus_recordings_20221001_20241011.ods" beforeDir="false" afterPath="$PROJECT_DIR$/zoomus_recordings_20221001_20241011.ods" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/test_fnmatch.py" beforeDir="false" afterPath="$PROJECT_DIR$/test/test_fnmatch.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/test_mutagen.py" beforeDir="false" afterPath="$PROJECT_DIR$/test/test_mutagen.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/zoom-recording-downloader.conf.template" beforeDir="false" afterPath="$PROJECT_DIR$/zoom-recording-downloader.conf.template" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -71,8 +68,8 @@
       <recent name="$PROJECT_DIR$" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/test" />
       <recent name="$PROJECT_DIR$/ksp" />
+      <recent name="$PROJECT_DIR$/test" />
     </key>
   </component>
   <component name="RunManager">
@@ -162,7 +159,23 @@
       <option name="project" value="LOCAL" />
       <updated>1729465693794</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="Added test code for tagging files - may move to different module.">
+      <option name="closed" value="true" />
+      <created>1730190615563</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1730190615563</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Deleted non-project file">
+      <option name="closed" value="true" />
+      <created>1730190786236</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1730190786236</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -190,7 +203,9 @@
     <MESSAGE value="Added Include and Exclude for both users (emails) and meeting topics using glob patterns." />
     <MESSAGE value="Refined logging/messaging." />
     <MESSAGE value="Fixed template" />
-    <option name="LAST_COMMIT_MESSAGE" value="Fixed template" />
+    <MESSAGE value="Added test code for tagging files - may move to different module." />
+    <MESSAGE value="Deleted non-project file" />
+    <option name="LAST_COMMIT_MESSAGE" value="Deleted non-project file" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -202,7 +217,7 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/test/test_mutagen.py</url>
-          <line>40</line>
+          <line>30</line>
           <option name="timeStamp" value="21" />
         </line-breakpoint>
       </breakpoints>

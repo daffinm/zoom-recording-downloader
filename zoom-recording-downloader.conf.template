@@ -28,6 +28,6 @@
 	    "topics": []
 	},
 	"Behaviour": {
-	    "mode": "download"
+	    "mode": "download|size"
 	}
 }

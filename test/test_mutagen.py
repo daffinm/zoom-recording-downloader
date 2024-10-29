@@ -18,26 +18,16 @@ class Keys:
     COPYRIGHT = "copyright"
 
 audio_original = "./media/EN_Bk01_Ch11-12_20221106-1852.m4a"
-audio_copy = "./media/audio_copy.m4a"
-cover_image = "./media/KSP Logo small.jpeg"
-
-num_tracks = 3
-
-title = "Ch0?-0?"
-artist = "Reader Man"
-album_artist = "Kaleb Seth Perl"
-album = "Book Title"
-date = "2023"
-track_number = 1
-genre = "Spoken Word"
-comment = "Language EN"
-copy_right = "Kaleb Seth Perl"
+video_original = "./media/EN_Bk01_Ch11-12_20221106-1852.mp4"
+audio_copy = "./media/copy_audio.m4a"
+video_copy = "./media/copy_video.mp4"
 
 def setup():
     shutil.copy(audio_original, audio_copy)
+    shutil.copy(video_original, video_copy)
 
-def add_easy_tags():
-    with open(audio_copy, 'r+b') as file:
+def add_metadata_to_media_file(file_path, title, artist, album_artist, album, date, track_number, num_tracks, genre, comment, copy_right):
+    with open(file_path, 'r+b') as file:
         audio_file = mutagen.File(file, easy=True)
 
         print('before:', audio_file.pprint(), end='\n\n')
@@ -56,15 +46,37 @@ def add_easy_tags():
         print('after:', audio_file.pprint(), end='\n\n')
         print(type(audio_file), type(audio_file.tags), end='\n\n')
 
-def add_cover_image():
-    audio_file = MP4(audio_copy)
-    with open(cover_image, "rb") as f:
+def add_cover_image_to_media_file(media_file_path, cover_image_path):
+    audio_file = MP4(media_file_path)
+    with open(cover_image_path, "rb") as f:
         audio_file["covr"] = [
             MP4Cover(f.read(), imageformat=MP4Cover.FORMAT_JPEG)
         ]
     audio_file.save()
 
-setup()
-add_easy_tags()
-add_cover_image()
 
+def add_metadata_to_ksp_media_file(media_file_path, track_title, readers, book_title, recording_year, track_number,
+                                   num_tracks, language, cover_image_path):
+    author = "Kaleb Seth Perl"
+    genre = "Spoken Word"
+    add_metadata_to_media_file(media_file_path, track_title, readers, author, book_title, recording_year,
+                               track_number, num_tracks, genre, language, author)
+    add_cover_image_to_media_file(media_file_path, cover_image_path)
+
+
+def test_01():
+    setup()
+
+    track_title = "Ch11-12"
+    readers = "David Wood, Tan Zaman"
+    book_title = "Tyranny Against Human Consciousness"
+    recording_year = "2022"
+    track_number = 6
+    num_tracks = 12
+    language = "English (EN)"
+    cover_image = "./media/KSP Logo small.jpeg"
+
+    add_metadata_to_ksp_media_file(audio_copy, track_title, readers, book_title, recording_year, track_number, num_tracks, language, cover_image)
+    add_metadata_to_ksp_media_file(video_copy, track_title, readers, book_title, recording_year, track_number, num_tracks, language, cover_image)
+
+test_01()
