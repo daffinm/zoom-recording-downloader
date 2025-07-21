@@ -172,7 +172,7 @@ def format_filename(params):
     day = meeting_time_local.strftime("%d")
     meeting_time = meeting_time_local.strftime(MEETING_STRFTIME)
 
-    # TODO make any additional file and folder name transformations part of the config.
+    # TODO make any additional file and folder name transformations part of the config. Or do in post processing, with other tasks like adding metadatak.
     filename = MEETING_FILENAME.format(**locals()).replace(" ", "-")
     folder = MEETING_FOLDER.format(**locals()).replace(" ", "-")
     return (filename, folder)

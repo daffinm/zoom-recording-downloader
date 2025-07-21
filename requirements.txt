@@ -6,3 +6,4 @@ requests~=2.32.3
 tqdm~=4.66.5
 
 mutagen~=1.47.0
+pandas~=2.3.1

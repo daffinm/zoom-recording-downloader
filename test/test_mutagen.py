@@ -67,16 +67,16 @@ def add_metadata_to_ksp_media_file(media_file_path, track_title, readers, book_t
 def test_01():
     setup()
 
-    track_title = "Ch11-12"
-    readers = "David Wood, Tan Zaman"
+    track_title = "Ch01"
+    readers = "Tan Zaman"
     book_title = "Tyranny Against Human Consciousness"
-    recording_year = "2022"
-    track_number = 6
-    num_tracks = 12
+    recording_year = "2023"
+    track_number = 1
+    num_tracks = 22
     language = "English (EN)"
     cover_image = "./media/KSP Logo small.jpeg"
 
     add_metadata_to_ksp_media_file(audio_copy, track_title, readers, book_title, recording_year, track_number, num_tracks, language, cover_image)
-    add_metadata_to_ksp_media_file(video_copy, track_title, readers, book_title, recording_year, track_number, num_tracks, language, cover_image)
+    # add_metadata_to_ksp_media_file(video_copy, track_title, readers, book_title, recording_year, track_number, num_tracks, language, cover_image)
 
 test_01()
