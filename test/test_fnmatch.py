@@ -11,6 +11,7 @@ def test():
 
     return False
 
+
 if test():
     print(f"Topic '{topic}' WILL be included")
 else:
