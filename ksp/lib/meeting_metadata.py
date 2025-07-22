@@ -1,10 +1,12 @@
-# In your meeting_manager.py file
+# In your meeting_metadata.py file
 from datetime import datetime
 
 import pandas as pd
+
+
 # from interfaces import IDataSource # Assuming you have this interface
 
-class MeetingManager: # Or class MeetingManager(IDataSource):
+class MeetingMetadata: # Or class MeetingManager(IDataSource):
     """
     Manages meeting data from a CSV file using defined constants.
     """
@@ -49,61 +51,55 @@ class MeetingManager: # Or class MeetingManager(IDataSource):
         if self.COL_STATUS not in self.metadataFile.columns:
             self.metadataFile[self.COL_STATUS] = self.STATUS_NO
 
-    def find_by_criteria_v1(self, **criteria) -> pd.DataFrame:
-        """
-        Finds meetings using a flexible set of key-value criteria.
-        Example: find_by_criteria(status='unprocessed', author='John Doe')
-        """
-        query_parts = []
-        for column, value in criteria.items():
-
-            # 2. Update the condition to include datetime objects
-            if isinstance(value, (str, datetime)):
-                # This now correctly handles both strings and datetimes
-                query_parts.append(f"`{column}` == '{value}'")
-            else:
-                # This handles numbers, booleans, etc.
-                query_parts.append(f"`{column}` == {value}")
-
-        # Join all parts with 'and'
-        query_string = " and ".join(query_parts)
-
-        # Return an empty DataFrame if there's no query, otherwise run it
-        if not query_string:
-            return pd.DataFrame(columns=self.metadataFile.columns)
-
-        return self.metadataFile.query(query_string)
-
     def find_by_criteria(self, **criteria) -> pd.DataFrame:
         """
-        Finds meetings using a flexible set of key-value criteria
-        using type-safe boolean indexing.
-        """
+         Finds meetings using a flexible set of key-value criteria.
+         - Standard key=value is an AND condition.
+         - A key with a list of values (key=[v1, v2]) is an OR condition.
+         Example AND: find_by_criteria(Status='unprocessed', Author='John Doe')
+         Example OR: find_by_criteria(Status='unprocessed', Author=['John Doe', 'Arthur Dailey'])
+         """
         # Start with a mask that is True for all rows
         mask = pd.Series(True, index=self.metadataFile.index)
 
         # Sequentially apply each criterion to the mask
         for column, value in criteria.items():
-            mask = mask & (self.metadataFile[column] == value)
+            if isinstance(value, list):
+                # If the value is a list, use .isin() for a logical OR
+                mask = mask & (self.metadataFile[column].isin(value))
+            else:
+                # Otherwise, use a standard equality check
+                mask = mask & (self.metadataFile[column] == value)
 
         # Return only the rows from the original DataFrame where the mask is True
         return self.metadataFile[mask]
 
-
-    def is_present(self, meeting_id, meeting_datetime: datetime) -> bool:
+    def is_meeting_listed_once(self, meeting_id, meeting_start_datetime: datetime) -> bool:
+        # Although the same Meeting ID will occur many times there should only be one with a particular start time.
         search_criteria = {
-            MeetingManager.COL_MEETING_ID: meeting_id,
-            MeetingManager.COL_MEETING_START_DATETIME: meeting_datetime
+            MeetingMetadata.COL_MEETING_ID: meeting_id,
+            MeetingMetadata.COL_MEETING_START_DATETIME: meeting_start_datetime
         }
+        print(f"Looking for a meeting with {MeetingMetadata.COL_MEETING_ID}[{meeting_id}] and {MeetingMetadata.COL_MEETING_START_DATETIME}[{meeting_start_datetime}]")
         matching_meetings = self.find_by_criteria(**search_criteria)
         num_meetings = len(matching_meetings)
-        return num_meetings == 1
+        print(f'Found {num_meetings} matching meeting(s)')
+
+        if num_meetings == 0:
+            return False
+        if num_meetings == 1:
+            return True
+        # This block is only reached if num_meetings > 1
+        raise ValueError(
+            f"Data integrity error: Found {num_meetings} meetings. Expected 0 or 1:\n"
+            f"{matching_meetings}"
+        )
 
     def is_downloaded(self, meeting_id, meeting_datetime: datetime) -> bool:
         search_criteria = {
-            MeetingManager.COL_MEETING_ID: meeting_id,
-            MeetingManager.COL_MEETING_START_DATETIME: meeting_datetime,
-            MeetingManager.COL_MEETING_FILES_DOWNLOADED: MeetingManager.STATUS_YES
+            MeetingMetadata.COL_MEETING_ID: meeting_id,
+            MeetingMetadata.COL_MEETING_START_DATETIME: meeting_datetime,
+            MeetingMetadata.COL_MEETING_FILES_DOWNLOADED: MeetingMetadata.STATUS_YES
         }
         matching_meetings = self.find_by_criteria(**search_criteria)
         num_meetings = len(matching_meetings)
