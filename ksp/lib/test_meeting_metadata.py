@@ -34,7 +34,7 @@ def get_all_unprocessed_meetings():
             manager.mark_as_processed(meeting_id)
             print(f"Marked meeting {meeting_id} as processed.")
     # 5. Save all changes back to the CSV file
-    manager.save_changes()
+    manager.save_metadata_changes()
     print(f"All changes have been saved to: {meeting_csv_file}")
 
 

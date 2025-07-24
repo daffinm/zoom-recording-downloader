@@ -1,14 +1,9 @@
-# In your meeting_metadata.py file
 from datetime import datetime
-
 import pandas as pd
 
-
-# from interfaces import IDataSource # Assuming you have this interface
-
-class MeetingMetadata: # Or class MeetingManager(IDataSource):
+class MeetingMetadata:
     """
-    Manages meeting data from a CSV file using defined constants.
+    Provides query and update methods for meeting metadata read from a CSV file.
     """
     # --- Constants for column names and status flags ---
     COL_MEETING_TOPIC = 'Topic'
@@ -126,7 +121,7 @@ class MeetingMetadata: # Or class MeetingManager(IDataSource):
         else:
             print(f"Warning: Meeting with ID {meeting_id} not found.")
 
-    def save_changes(self):
+    def save_metadata_changes(self):
         """
         Writes the updated DataFrame back to the original CSV file.
         """
