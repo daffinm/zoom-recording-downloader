@@ -8,36 +8,30 @@
 	"Storage": {
 		"download_dir": "downloads"
 	},
-	"Recordings": {
-        "start_year": "1970",
-        "start_month": "1",
-        "start_day": "1",
-        "start_date": "2022-11-01",
-        "end_date": "2025-12-31"
+	"DateInterval": {
+        "start_year": "",
+        "start_month": "",
+        "start_day": "",
+        "start_date": "",
+        "end_date": ""
 	},
 	"Behaviour": {
 	    "mode": "download|size"
 	},
-    "Strategy": {
-        "module": "lib.strategies",
-        "class": "DefaultMeetingHelperStrategy",
-        "config": {
-            "Include": {
-                "emails": [],
-                "topics": []
-            },
-            "Exclude": {
-                "emails": [],
-                "topics": []
-            },
-            "FilepathFormat": {
-                "timezone": "UTC",
-                "strftime": "%Y%m%d-%H%M",
-         		"folder": "{year}/{month}/{meeting_time}-{topic}",
-		        "filename": "{meeting_time}-{topic}-{rec_type}-{recording_id}.{file_extension}",
-                "filepath_replace_old": " ",
-                "filepath_replace_new": "_"
-            }
-        }
+    "UserFilter": {
+        "emails_to_include": [],
+        "emails_to_exclude": []
+    },
+    "MeetingFilter": {
+        "topics_to_include": [],
+        "topics_to_exclude": []
+    },
+    "FilepathFormat": {
+        "timezone": "",
+        "strftime": "",
+        "folder": "",
+        "filename": "",
+        "filepath_replace_old": "",
+        "filepath_replace_new": ""
     }
 }

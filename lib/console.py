@@ -16,10 +16,8 @@ class Console:
     """
     Defines static logging methods for use in the main script.
     """
-
     @staticmethod
-    def log(message='', end='\n', flush=False):
-        """A general-purpose print replacement."""
+    def log(message="", end='\n', flush=False):
         print(message, end=end, flush=flush)
 
     @staticmethod

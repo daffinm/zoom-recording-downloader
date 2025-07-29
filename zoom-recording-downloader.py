@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # TODO Check that README.md is accurate in terms of defaults.
+# TODO Test that all the defaults work ok if minimal config is given.
 
 # Program Name: zoom-recording-downloader.py
 # Description:  Zoom Recording Downloader is a cross-platform Python script
@@ -15,80 +16,115 @@
 # system libraries
 import base64
 import datetime
-import importlib
+import fnmatch
 import json
 import os
 import signal
 import sys as system
+import re as regex
+from datetime import timezone
+from zoneinfo import ZoneInfo
 
 # installed libraries
 import dateutil.parser as parser
 import pathvalidate as path_validate
 import requests
 import tqdm as progress_bar
+from numpy.f2py.auxfuncs import throw_error
 
 # Local imports
-from lib.strategies import MeetingHelperStrategy
 from lib.console import Console
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Configuration
+# ----------------------------------------------------------------------------------------------------------------------
+APP_VERSION = "3.1 (Blarf)"
+API_ENDPOINT_USER_LIST = "https://api.zoom.us/v2/users"
+RECORDING_FILE_INCOMPLETE = "incomplete"
+# ----------------------------------------------------
+# Load the configuration file
+# The configuration file is expected to be in the same directory as this script.
 CONF_PATH = "zoom-recording-downloader.conf"
 with open(CONF_PATH, encoding="utf-8-sig") as json_file:
     CONF = json.loads(json_file.read())
 
 
-def config(section, key=None, default=''):
-    """
-    Retrieves a configuration value by section and key.
-    If key is None, returns the entire section.
-    :param section: the name of a config section.
-    :param key: key to the value in that section.
-    :param default: value if key is not defined in that section (defaults to empty string)
-    :return: the value of the key, or the default value. If key is None then the entire config section.
-    """
+def config(section:str, key:str, default:str):
     try:
-        section_data = CONF[section]
-        if key is None:
-            return section_data
-        return section_data[key]
+        return CONF[section][key]
     except KeyError:
         if default == LookupError:
-            if key is None:
-                Console.error(f"### Config section '{section}' not found in {CONF_PATH}")
-            else:
-                Console.error(f"### Config key '{key}' not found in section '{section}' in {CONF_PATH}")
-            system.exit(1)
+            raise LookupError(f"No value found for [{section}][{key}] in {CONF_PATH}")
         else:
             return default
 
 
-ACCOUNT_ID = config("OAuth", "account_id", LookupError)
-CLIENT_ID = config("OAuth", "client_id", LookupError)
-CLIENT_SECRET = config("OAuth", "client_secret", LookupError)
-APP_VERSION = "3.1 (Strategy)"
-API_ENDPOINT_USER_LIST = "https://api.zoom.us/v2/users"
-RECORDING_FILE_INCOMPLETE = "incomplete"
-
-
 # ----------------------------------------------------
-# Script Behaviour: download files or just size things up?
+# OAuth
+# ----------------------------------------------------
+# These values are required for OAuth authentication with Zoom API.
+SECTION_KEY_OAUTH = "OAuth"
+ACCOUNT_ID = config(section=SECTION_KEY_OAUTH, key="account_id", default=LookupError)
+CLIENT_ID = config(section=SECTION_KEY_OAUTH, key="client_id", default=LookupError)
+CLIENT_SECRET = config(section=SECTION_KEY_OAUTH, key="client_secret", default=LookupError)
+# ----------------------------------------------------
+# Storage
+# ----------------------------------------------------
+DOWNLOAD_DIRECTORY = config("Storage", "download_dir", 'downloads')
+# ----------------------------------------------------
+# DateInterval - time period for which to download recordings
+# ----------------------------------------------------
+SECTION_KEY_DATE_INTERVAL = "DateInterval"
+START_YEAR = config(section=SECTION_KEY_DATE_INTERVAL, key="start_year", default=datetime.date.today().year)
+START_MONTH = config(section=SECTION_KEY_DATE_INTERVAL, key="start_month", default=1)
+START_DAY = config(section=SECTION_KEY_DATE_INTERVAL, key="start_day", default=1)
+START_DATE = parser.parse(config(section=SECTION_KEY_DATE_INTERVAL, key="start_date", default=f"{START_YEAR}-{START_MONTH}-{START_DAY}"))
+END_DATE = parser.parse(config(section=SECTION_KEY_DATE_INTERVAL, key="end_date", default=str(datetime.date.today())))
+# ----------------------------------------------------
+# Behaviour: download files or just size things up?
 # ----------------------------------------------------
 BEHAVIOUR_MODE_DOWNLOAD = "download"
 BEHAVIOUR_MODE_SIZE = "size"
 BEHAVIOUR_MODES = [BEHAVIOUR_MODE_DOWNLOAD, BEHAVIOUR_MODE_SIZE]
-BEHAVIOUR_MODE = config("Behaviour", "mode", BEHAVIOUR_MODES[0])
+BEHAVIOUR_MODE = config("Behaviour", "mode", BEHAVIOUR_MODE_DOWNLOAD)
 if BEHAVIOUR_MODE not in BEHAVIOUR_MODES:
     Console.error(f"Unknown Behaviour mode: {BEHAVIOUR_MODE}")
     exit(1)
-BEHAVIOUR_MODE_VERB = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODES[0] else "Sizing"
+BEHAVIOUR_MODE_VERB = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD else "Sizing"
 # ----------------------------------------------------
+# UserFilter: filtering users based on email addresses
+# ----------------------------------------------------
+USER_FILTER_INCLUDE = config("UserFilter", "emails_to_include", [])
+USER_FILTER_EXCLUDE = config("UserFilter", "emails_to_exclude", [])
+# ----------------------------------------------------
+# MeetingFilter: filtering meetings based on topics
+# ----------------------------------------------------
+MEETING_FILTER_INCLUDE = config("MeetingFilter", "topics_to_include", [])
+MEETING_FILTER_EXCLUDE = config("MeetingFilter", "topics_to_exclude", [])
+# ----------------------------------------------------
+# FilepathFormat: formatting the file and folder names
+# ----------------------------------------------------
+SECTION_KEY_FF = "FilepathFormat"
+DEFAULT_TIMEZONE = "UTC"
+DEFAULT_TIME_FORMAT = "%Y.%m.%d - %I.%M %p"
+DEFAULT_FILENAME_FORMAT = "{meeting_time} - {topic} - {rec_type} - {recording_id}.{file_extension}"
+DEFAULT_FOLDERNAME_FORMAT = "{topic} - {meeting_time}"
+#
+MEETING_TIMEZONE = ZoneInfo(config(section=SECTION_KEY_FF, key="timezone", default=DEFAULT_TIMEZONE))
+MEETING_STRFTIME = config(section=SECTION_KEY_FF, key="strftime", default=f'%Y.%m.%d - %I.%M %p {DEFAULT_TIMEZONE}')
+MEETING_FILENAME_FORMAT = config(section=SECTION_KEY_FF, key="filename", default=DEFAULT_FILENAME_FORMAT)
+MEETING_FOLDERNAME_FORMAT = config(section=SECTION_KEY_FF, key="folder", default=DEFAULT_FOLDERNAME_FORMAT)
+MEETING_FILEPATH_REPLACE_OLD = config(section=SECTION_KEY_FF, key="filepath_replace_old", default="")
+MEETING_FILEPATH_REPLACE_NEW = config(section=SECTION_KEY_FF, key="filepath_replace_old", default="")
 
 
-RECORDING_START_YEAR = config("Recordings", "start_year", datetime.date.today().year)
-RECORDING_START_MONTH = config("Recordings", "start_month", 1)
-RECORDING_START_DAY = config("Recordings", "start_day", 1)
-RECORDING_START_DATE = parser.parse(config("Recordings", "start_date", f"{RECORDING_START_YEAR}-{RECORDING_START_MONTH}-{RECORDING_START_DAY}"))
-RECORDING_END_DATE = parser.parse(config("Recordings", "end_date", str(datetime.date.today())))
-DOWNLOAD_DIRECTORY = config("Storage", "download_dir", 'downloads')
+# ----------------------------------------------------------------------------------------------------------------------
+# Code
+# ----------------------------------------------------------------------------------------------------------------------
+# Load the access token for OAuth authentication with Zoom API
+ACCESS_TOKEN = None
+AUTHORIZATION_HEADER = None
 
 
 def load_access_token():
@@ -119,6 +155,11 @@ def load_access_token():
     except KeyError:
         Console.error(f"### The key '{ACCESS_TOKEN}' wasn't found in the response.")
         # system.exit(1)
+
+
+def handle_graceful_shutdown(signal_received, frame):
+    Console.info(f"\nSIGINT or CTRL-C detected. Exiting gracefully.")
+    system.exit(0)
 
 
 def get_users():
@@ -194,9 +235,9 @@ def per_delta(start, end, delta):
 
 def get_meetings_for(user_id):
     recordings = []
-    Console.log(f"Fetching data for meetings between {RECORDING_START_DATE:%Y-%m-%d} and {RECORDING_END_DATE:%Y-%m-%d}:",
+    Console.log(f"Fetching data for meetings between {START_DATE:%Y-%m-%d} and {END_DATE:%Y-%m-%d}:",
                 end="", flush=True)
-    for start, end in per_delta(RECORDING_START_DATE, RECORDING_END_DATE, datetime.timedelta(days=30)):
+    for start, end in per_delta(START_DATE, END_DATE, datetime.timedelta(days=30)):
         post_data = {
             "userId": user_id,
             "page_size": 300,
@@ -266,41 +307,105 @@ def download_recording(download_url, email, filename, folder_name, recording_siz
         return False
 
 
-def handle_graceful_shutdown(signal_received, frame):
-    Console.info(f"\nSIGINT or CTRL-C detected. Exiting gracefully.")
-    system.exit(0)
+def should_ignore_user(email: str) -> bool:
+    if USER_FILTER_INCLUDE and not any(fnmatch.fnmatch(email, pattern) for pattern in USER_FILTER_INCLUDE):
+        # Ignore if not mentioned in active include filter
+        return True
+    # Exclude cannot override include, so we check it last
+    if USER_FILTER_EXCLUDE and any(fnmatch.fnmatch(email, pattern) for pattern in USER_FILTER_EXCLUDE):
+        # Ignore if mentioned in exclude filter
+        return True
+    # Default response is to NOT ignore the user
+    return False
 
 
-def validate_user_list(users: list):
-    if not isinstance(users, list): raise TypeError("Expected 'users' to be a list.")
-    for user in users:
-        if not isinstance(user, tuple) or len(user) != 4: raise ValueError(f"Invalid user entry format: {user}")
-        if not all(isinstance(item, str) for item in user): raise TypeError(
-            f"All items in user tuple must be strings: {user}")
+# ----------------------------------------------------------------------------------------------------------------------
+# Strategies for filtering meetings and formatting file names
+# ----------------------------------------------------------------------------------------------------------------------
+# TODO New strategies for meeting filtering and file naming can be implemented here.
+
+def should_ignore_meeting_default(meeting: dict) -> bool:
+    meeting_topic = meeting.get("topic")
+    if MEETING_FILTER_INCLUDE and not any(fnmatch.fnmatch(meeting_topic, pattern) for pattern in MEETING_FILTER_INCLUDE):
+        # Ignore if not mentioned in active include filter
+        return True
+    # Exclude cannot override include, so we check it last
+    if MEETING_FILTER_EXCLUDE and any(fnmatch.fnmatch(meeting_topic, pattern) for pattern in MEETING_FILTER_EXCLUDE):
+        # Ignore if mentioned in exclude filter
+        return True
+    # Default response is to NOT ignore the meeting
+    return False
 
 
-def load_strategy(strategy_config: dict, expected_interface: type) -> MeetingHelperStrategy:
-    """
-    Dynamically loads and instantiates a strategy class.
-    Passes the strategy's own config block to its constructor.
-    """
-    module_name = strategy_config["module"]
-    class_name = strategy_config["class"]
-    init_params = strategy_config.get("config", {})
-
-    try:
-        strategy_module = importlib.import_module(module_name)
-        strategy_class = getattr(strategy_module, class_name)
-        if not issubclass(strategy_class, expected_interface):
-            raise TypeError(f"Strategy class '{class_name}' does not implement '{expected_interface.__name__}'")
-        # Pass the strategy-specific config to its constructor
-        return strategy_class(init_params)
-    except (ImportError, AttributeError, TypeError) as e:
-        Console.error(f"Error loading strategy '{class_name}': {e}")
-        raise
+def should_ignore_meeting(meeting: dict) -> bool:
+    # Default strategy for ignoring meetings
+    return should_ignore_meeting_default(meeting)
+    # TODO implement new strategy here.
 
 
 
+def format_filename(meeting: dict, recording_file: dict) -> (str, str):
+    file_extension = recording_file["file_extension"].lower()
+    recording_id = recording_file["id"]
+    recording_type = recording_file["recording_type"]
+
+    invalid_chars_pattern = r'[<>:"/\\|?*\x00-\x1F]'
+    topic = regex.sub(invalid_chars_pattern, '', meeting["topic"])
+    rec_type = recording_type.replace("_", " ").title()
+    meeting_time_utc = parser.parse(meeting["start_time"]).replace(tzinfo=timezone.utc)
+    meeting_time_local = meeting_time_utc.astimezone(MEETING_TIMEZONE)
+    year = meeting_time_local.strftime("%Y")
+    month = meeting_time_local.strftime("%m")
+    day = meeting_time_local.strftime("%d")
+    meeting_time = meeting_time_local.strftime(MEETING_STRFTIME)
+
+    filename = MEETING_FILENAME_FORMAT.format(**locals())
+    filename = filename.replace(
+        MEETING_FILEPATH_REPLACE_OLD,
+        MEETING_FILEPATH_REPLACE_NEW
+    )
+
+    folder_name = MEETING_FOLDERNAME_FORMAT.format(**locals())
+    folder_name = folder_name.replace(
+        MEETING_FILEPATH_REPLACE_OLD,
+        MEETING_FILEPATH_REPLACE_NEW
+    )
+
+    return folder_name, filename
+
+def format_filename(meeting: dict, recording_file: dict) -> (str, str):
+    file_extension = recording_file["file_extension"].lower()
+    recording_id = recording_file["id"]
+    recording_type = recording_file["recording_type"]
+
+    invalid_chars_pattern = r'[<>:"/\\|?*\x00-\x1F]'
+    topic = regex.sub(invalid_chars_pattern, '', meeting["topic"])
+    rec_type = recording_type.replace("_", " ").title()
+    meeting_time_utc = parser.parse(meeting["start_time"]).replace(tzinfo=timezone.utc)
+    meeting_time_local = meeting_time_utc.astimezone(MEETING_TIMEZONE)
+    year = meeting_time_local.strftime("%Y")
+    month = meeting_time_local.strftime("%m")
+    day = meeting_time_local.strftime("%d")
+    meeting_time = meeting_time_local.strftime(MEETING_STRFTIME)
+
+    filename = MEETING_FILENAME_FORMAT.format(**locals())
+    filename = filename.replace(
+        MEETING_FILEPATH_REPLACE_OLD,
+        MEETING_FILEPATH_REPLACE_NEW
+    )
+
+    folder_name = MEETING_FOLDERNAME_FORMAT.format(**locals())
+    folder_name = folder_name.replace(
+        MEETING_FILEPATH_REPLACE_OLD,
+        MEETING_FILEPATH_REPLACE_NEW
+    )
+
+    return folder_name, filename
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Main function
+# ----------------------------------------------------------------------------------------------------------------------
 def main():
     # clear the screen buffer
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -324,15 +429,7 @@ def main():
 
     Console.bold("Getting user accounts...")
     users: list = get_users()
-    validate_user_list(users)
     Console.log(f"Got {len(users)} user accounts.")
-
-    # --- Load Strategy ---
-    Console.bold("Loading Meeting Helper strategy.")
-    strategy_conf = config("Strategy", default=LookupError)
-    # Load one strategy object that handles all helper logic
-    meeting_helper = load_strategy(strategy_conf, MeetingHelperStrategy)
-    Console.log(f"Using strategy class: {strategy_conf['class']}")
 
     Console.dark_cyan("\n>>> Processing list of users in this organisation:", True, True)
     total_bytes = 0
@@ -340,7 +437,7 @@ def main():
     # for email, user_id, first_name, last_name in users:
     for index_users, (email, user_id, first_name, last_name) in enumerate(users, start=1):
         # --- Use the strategy for filtering users ---
-        if meeting_helper.should_ignore_user(email):
+        if should_ignore_user(email):
             Console.warn(f"\n>>>> Ignoring meetings for user {index_users}/{len(users)}: {first_name} {last_name} ({email})", True)
             continue
 
@@ -353,8 +450,8 @@ def main():
             meeting_time = meeting.get("start_time", "Unknown Time")
             Console.bold(f"\n{first_name} {last_name} ({email}) meeting {index_meetings}/{len(meetings)}: {meeting_topic} ({meeting_time})")
 
-            # --- Use the strategy for filtering meetings ---
-            if meeting_helper.should_ignore_meeting(meeting):
+            # --- TODO switch strategy for filtering meetings ---
+            if should_ignore_meeting(meeting):
                 Console.warn("Ignoring meeting!")
                 continue
 
@@ -370,8 +467,8 @@ def main():
                     Console.warn(f"### Recording file is incomplete, skipping.")
                     continue
 
-                # --- Use the strategy for naming files and folders ---
-                folder_name, filename = meeting_helper.format_filename(meeting, recording_file)
+                # --- ToDO switch strategy for naming files and folders ---
+                folder_name, filename = format_filename(meeting=meeting, recording_file=recording_file)
 
                 Console.log(
                     f"==> {BEHAVIOUR_MODE_VERB} file {file_number}/{len(meeting_download_info)}: type={recording_file['recording_type']}, dest={filename}")
