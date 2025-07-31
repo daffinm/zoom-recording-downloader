@@ -206,11 +206,13 @@ def get_users():
 
 
 def make_download_info_for(meeting: dict) -> list:
-    if not meeting.get("recording_files"):
-        raise Exception("No recording files specified")
+    recording_files = meeting.get("recording_files")
+
+    if not recording_files:
+        return None
 
     download_info = []
-    for recording_file in meeting["recording_files"]:
+    for recording_file in recording_files:
         file_type = recording_file.get("file_type", "")
         if file_type == "":
             recording_type = RECORDING_FILE_INCOMPLETE
@@ -261,7 +263,7 @@ def get_meetings_for(user_id):
     return recordings
 
 
-def download_recording(download_url, email, filename, folder_name, recording_size):
+def download_meeting_file(download_url, filename, folder_name, recording_size):
     dl_dir = os.path.join(DOWNLOAD_DIRECTORY, folder_name)
     sanitized_download_dir = path_validate.sanitize_filepath(dl_dir)
     sanitized_filename = path_validate.sanitize_filename(filename)
@@ -275,7 +277,7 @@ def download_recording(download_url, email, filename, folder_name, recording_siz
     if os.path.exists(full_filename):
         downloaded_file_size = os.path.getsize(full_filename)
         if downloaded_file_size == recording_size:
-            Console.log(f"Recording file has already been downloaded successfully :)")
+            Console.green(f"Meeting file has already been downloaded successfully :)")
             return True
 
     # Download recording file.
@@ -345,8 +347,22 @@ def should_ignore_meeting_default(meeting: dict) -> bool:
 def should_ignore_meeting(meeting: dict) -> bool:
     # return should_ignore_meeting_default(meeting)
     is_meeting_present = ksp_metadata.is_meeting_present(zoom_data=meeting)
-    ignore_meeting = not is_meeting_present
-    return ignore_meeting
+    is_meeting_downloaded = ksp_metadata.is_already_downloaded(zoom_data=meeting)
+    is_meeting_to_be_deleted = ksp_metadata.is_meeting_to_be_deleted(zoom_data=meeting)
+
+    if not is_meeting_present:
+        Console.warn("Meeting is not present in the metadata...")
+        return True
+    # Meeting is present in the metadata, so we check if it is to be deleted (a partial or aborted meeting).
+    if is_meeting_to_be_deleted:
+        Console.warn("Meeting is to be deleted...")
+        return True
+    # Meeting is present in the metadata, and not to be deleted, so we check if it has been downloaded.
+    if is_meeting_downloaded:
+        Console.warn("Meeting files already downloaded...")
+        return True
+    # Meeting is present in the metadata, and has not been downloaded.
+    return False
 
 
 def format_filename_default(meeting: dict, recording_file: dict) -> (str, str):
@@ -478,7 +494,7 @@ def main():
 
         Console.blue(f"\n>>>> Getting meetings for user {index_users}/{len(users)}: {first_name} {last_name} ({email})", True, True)
         meetings: list = get_meetings_for(user_id)
-        Console.log(f"Found {len(meetings)} meeting(s)")
+        Console.log(f"Found {len(meetings)} meeting(s) for this user.")
 
         for index_meetings, meeting in enumerate(meetings, start=1):
             meeting_topic = meeting.get("topic", "No Topic")
@@ -490,12 +506,16 @@ def main():
                 Console.warn("Ignoring meeting!")
                 continue
 
-            try:
-                meeting_download_info = make_download_info_for(meeting)
-                Console.log(f"Found {len(meeting_download_info)} files for this meeting.")
-            except Exception as e:
-                Console.error(f"### Could not get recording files: {e}")
+            meeting_download_info = make_download_info_for(meeting)
+
+            if not meeting_download_info:
+                Console.warn("No recording files found for this meeting. Skipping.")
                 continue
+
+
+            num_files_to_download = len(meeting_download_info)
+            num_files_downloaded = 0
+            Console.log(f"Found {num_files_to_download} file(s) for this meeting.")
 
             for file_number, recording_file in enumerate(meeting_download_info, 1):
                 if recording_file["recording_type"] == RECORDING_FILE_INCOMPLETE:
@@ -509,13 +529,18 @@ def main():
                     f"==> {BEHAVIOUR_MODE_VERB} file {file_number}/{len(meeting_download_info)}: type={recording_file['recording_type']}, dest={filename}")
 
                 if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
-                    download_recording(recording_file["download_url"],
-                                       email,
-                                       filename,
-                                       folder_name,
-                                       recording_file["file_size"])
+                    if download_meeting_file(download_url=recording_file["download_url"],
+                                          filename=filename,
+                                          folder_name=folder_name,
+                                          recording_size=recording_file["file_size"]):
+                        Console.log(f"File {file_number}/{num_files_to_download} has been downloaded.")
+                        num_files_downloaded += 1
                 else:
                     total_bytes += recording_file["file_size"]
+            if num_files_downloaded == num_files_to_download:
+                Console.green(f"All files for this meeting have been downloaded.", bold=True, underline=True)
+                # FIXME remove this custom insertion - non-default behaviour
+                ksp_metadata.mark_as_downloaded(meeting)
 
     Console.green(f"\n{'*' * 24 } All done! {'*' * 24 }", True, False)
     if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
@@ -523,6 +548,8 @@ def main():
     else:
         total_gb = total_bytes / (1024 * 1024 * 1024)
         Console.blue(f"\nTotal disk space required to download these meetings is: {total_gb:.2f} GB", True)
+
+    ksp_metadata.save_metadata_changes()
 
 
 def splash_screen():

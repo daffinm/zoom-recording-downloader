@@ -31,7 +31,7 @@ def get_all_unprocessed_meetings():
         # 4. If successful, mark it as processed
         if success:
             # Pass the meeting_id variable to the processing method
-            manager.mark_as_processed(meeting_id)
+            manager.mark_as_downloaded(meeting_id)
             print(f"Marked meeting {meeting_id} as processed.")
     # 5. Save all changes back to the CSV file
     manager.save_metadata_changes()

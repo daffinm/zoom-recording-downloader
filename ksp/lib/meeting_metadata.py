@@ -37,6 +37,7 @@ class MetadataDB:
     class Values:
         STATUS_YES = 'YES'
         STATUS_NO = ''
+        ACTION_DELETE = 'Delete'
 
     class TimeInfo:
         class Zoom:
@@ -183,9 +184,66 @@ class MetadataDB:
         metadata = self.MeetingMetadata(matching_meetings)
         return metadata
 
+
+    def is_already_downloaded(self, zoom_data:dict) -> bool:
+        """
+        Checks if all the files for a meeting have already been downloaded according to the metadata log.
+        """
+        zoom_meeting_wrapper = self.ZoomMeetingWrapper(zoom_data)
+        # Find the row index using the find_by_criteria method
+        matching_meetings = self._find_by_criteria(
+            **{
+                self.Columns.MEETING_ID: zoom_meeting_wrapper.id,
+                self.Columns.MEETING_START_TIME_PST: zoom_meeting_wrapper.start_time,
+                self.Columns.MEETING_FILES_DOWNLOADED: self.Values.STATUS_YES
+            }
+        )
+        return not matching_meetings.empty
+
+    def is_meeting_to_be_deleted(self, zoom_data:dict) -> bool:
+        zoom_meeting_wrapper = self.ZoomMeetingWrapper(zoom_data)
+        matching_meetings = self._find_by_criteria(
+            **{
+                self.Columns.MEETING_ID: zoom_meeting_wrapper.id,
+                self.Columns.MEETING_START_TIME_PST: zoom_meeting_wrapper.start_time,
+                self.Columns.ACTION: self.Values.ACTION_DELETE
+            }
+        )
+        return not matching_meetings.empty
+
+    def mark_as_downloaded(self, zoom_data:dict):
+        zoom_meeting_wrapper = self.ZoomMeetingWrapper(zoom_data)
+        # Find the row index using the find_by_criteria method
+        matching_meetings = self._find_by_criteria(
+            **{
+                self.Columns.MEETING_ID: zoom_meeting_wrapper.id,
+                self.Columns.MEETING_START_TIME_PST: zoom_meeting_wrapper.start_time
+            }
+        )
+        if not matching_meetings.empty:
+            idx = matching_meetings.index[0]
+            self.metadataFile.loc[idx, self.Columns.STATUS] = self.Values.STATUS_YES
+        else:
+            print(
+                f"Warning: Meeting with ID {zoom_meeting_wrapper.id} and start time {zoom_meeting_wrapper.start_time} not found.")
+
+
+
+    def save_metadata_changes(self):
+        """
+        Writes the updated DataFrame back to the original CSV file.
+        """
+        self.metadataFile.to_csv(self.path, index=False)
+        Console.green(f"Metadata changes saved to {self.path}")
+
+    # ------------------------------------
+    # Junk pile
+    # ------------------------------------
+
     def is_meeting_present(self, zoom_data:dict) -> bool:
         csv_metadata = self.find_csv_metadata_for(zoom_data)
         num_meetings = csv_metadata.size
+
         # print(f'Found {num_meetings} matching meeting(s)')
 
         if num_meetings == 0:
@@ -198,9 +256,6 @@ class MetadataDB:
             f"{csv_metadata}"
         )
 
-    # ------------------------------------
-    # Junk pile
-    # ------------------------------------
 
     def _count_by_meeting_id(self, meeting_id) -> int:
         # Although the same Meeting ID will occur many times there should only be one with a particular start time.
@@ -246,21 +301,3 @@ class MetadataDB:
         # Build the query string using the constants
         query_string = f"`{self.Columns.STATUS}` == '{self.Values.STATUS_NO}'"
         return self.metadataFile.query(query_string)
-
-    def mark_as_processed(self, meeting_id):
-        """
-        Updates the status of a specific meeting to 'processed'.
-        """
-        # Find the row index using the meeting ID column constant
-        idx = self.metadataFile.index[self.metadataFile[self.Columns.MEETING_ID] == meeting_id].tolist()
-        if idx:
-            # Update the status column using the status constant
-            self.metadataFile.loc[idx[0], self.Columns.STATUS] = self.Values.STATUS_YES
-        else:
-            print(f"Warning: Meeting with ID {meeting_id} not found.")
-
-    def save_metadata_changes(self):
-        """
-        Writes the updated DataFrame back to the original CSV file.
-        """
-        self.metadataFile.to_csv(self.path, index=False)
