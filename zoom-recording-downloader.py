@@ -34,7 +34,7 @@ from numpy.f2py.auxfuncs import throw_error
 
 # Local imports
 from lib.console import Console
-
+from meeting_metadata import MetadataDB
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Configuration
@@ -117,6 +117,11 @@ MEETING_FILENAME_FORMAT = config(section=SECTION_KEY_FF, key="filename", default
 MEETING_FOLDERNAME_FORMAT = config(section=SECTION_KEY_FF, key="folder", default=DEFAULT_FOLDERNAME_FORMAT)
 MEETING_FILEPATH_REPLACE_OLD = config(section=SECTION_KEY_FF, key="filepath_replace_old", default="")
 MEETING_FILEPATH_REPLACE_NEW = config(section=SECTION_KEY_FF, key="filepath_replace_old", default="")
+
+# ----------------------------------------------------
+# Metadata
+# ----------------------------------------------------
+ksp_metadata = MetadataDB("ksp/metadata/David_Wood_Zoom_Recordings-2022-11-06--2024-11-07.csv")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -338,13 +343,13 @@ def should_ignore_meeting_default(meeting: dict) -> bool:
 
 
 def should_ignore_meeting(meeting: dict) -> bool:
-    # Default strategy for ignoring meetings
-    return should_ignore_meeting_default(meeting)
-    # TODO implement new strategy here.
+    # return should_ignore_meeting_default(meeting)
+    is_meeting_present = ksp_metadata.is_meeting_present(zoom_data=meeting)
+    ignore_meeting = not is_meeting_present
+    return ignore_meeting
 
 
-
-def format_filename(meeting: dict, recording_file: dict) -> (str, str):
+def format_filename_default(meeting: dict, recording_file: dict) -> (str, str):
     file_extension = recording_file["file_extension"].lower()
     recording_id = recording_file["id"]
     recording_type = recording_file["recording_type"]
@@ -373,12 +378,25 @@ def format_filename(meeting: dict, recording_file: dict) -> (str, str):
 
     return folder_name, filename
 
+
 def format_filename(meeting: dict, recording_file: dict) -> (str, str):
+
+    # Use locally defined variables to format the filename and folder name -- **locals() is used to replace the variables
+    # of the same name in the MEETING_FILENAME_FORMAT and MEETING_FOLDERNAME_FORMAT strings.
+    # This allows for easy customization of the filename and folder name formats.
+    # The variables are defined above, and the format strings are defined in the configuration file.
+    # This is a good way to keep the code clean and maintainable.
+    # It also allows for easy customization of the filename and folder name formats.
+    # If you want to change the format of the filename or folder name, you can do so in the configuration file
+    # without having to change the code here too much.
+
+    # Previous variables used in the format strings
     file_extension = recording_file["file_extension"].lower()
     recording_id = recording_file["id"]
     recording_type = recording_file["recording_type"]
 
     invalid_chars_pattern = r'[<>:"/\\|?*\x00-\x1F]'
+
     topic = regex.sub(invalid_chars_pattern, '', meeting["topic"])
     rec_type = recording_type.replace("_", " ").title()
     meeting_time_utc = parser.parse(meeting["start_time"]).replace(tzinfo=timezone.utc)
@@ -388,7 +406,24 @@ def format_filename(meeting: dict, recording_file: dict) -> (str, str):
     day = meeting_time_local.strftime("%d")
     meeting_time = meeting_time_local.strftime(MEETING_STRFTIME)
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # New variables used in the format strings from ksp meeting metadata
+    # ------------------------------------------------------------------------------------------------------------------
+    metadata_for_this_meeting = ksp_metadata.find_csv_metadata_for(zoom_data=meeting)
+    # Custom variables for the format strings
+    language = metadata_for_this_meeting.language
+    author = metadata_for_this_meeting.author
+    book_id = metadata_for_this_meeting.book_id
+    book_title = metadata_for_this_meeting.book_title
+    chapters = metadata_for_this_meeting.chapters
+    group_id = metadata_for_this_meeting.group_id
+    start_time = meeting_time
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # Format the filename and folder name replacing variables in the format strings with the values of the same name
+    # ------------------------------------------------------------------------------------------------------------------
     filename = MEETING_FILENAME_FORMAT.format(**locals())
+
     filename = filename.replace(
         MEETING_FILEPATH_REPLACE_OLD,
         MEETING_FILEPATH_REPLACE_NEW
@@ -414,7 +449,7 @@ def main():
 
     # --- Prompt user to continue ---
     behaviour_message = f"Behaviour mode is '{BEHAVIOUR_MODE}': " + (
-        "Meeting files will be downloaded."
+        f"Meeting files will be downloaded to: {DOWNLOAD_DIRECTORY}"
         if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD
         else "Total size of download will be calculated."
     )
