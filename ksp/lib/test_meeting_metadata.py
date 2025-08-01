@@ -49,7 +49,7 @@ class TestMetadataDB(unittest.TestCase):
 
     def test_meeting_exists_in_metadata(self):
         meeting_data = self.zoom_meeting_data_to_download
-        result = self.db.is_meeting_present(meeting_data)
+        result = self.db.is_meeting_listed(meeting_data)
         self.assertTrue(result, "Meeting data should be found in the metadata")
 
     def test_meeting_is_to_be_deleted_true(self):

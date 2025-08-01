@@ -209,7 +209,7 @@ class MetadataDB:
         return metadata
 
 
-    def is_meeting_present(self, zoom_data:dict) -> bool:
+    def is_meeting_listed(self, zoom_data:dict) -> bool:
         csv_metadata = self.find_csv_metadata_for(zoom_data)
         num_meetings = csv_metadata.size
 

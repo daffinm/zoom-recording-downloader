@@ -379,16 +379,16 @@ def format_filename(meeting: dict, recording_file: dict) -> (str, str):
 # ----------------------------------------------------------------------------------------------------------------------
 def should_ignore_meeting_alternate_strategy(meeting: dict) -> bool:
     # return should_ignore_meeting_default(meeting)
-    is_meeting_present = ksp_metadata.is_meeting_present(zoom_data=meeting)
+    is_meeting_listed = ksp_metadata.is_meeting_listed(zoom_data=meeting)
     is_meeting_downloaded = ksp_metadata.is_already_downloaded(zoom_meeting_data=meeting)
     is_meeting_to_be_deleted = ksp_metadata.is_meeting_to_be_deleted(zoom_meeting_data=meeting)
 
-    if not is_meeting_present:
-        Console.log("Meeting is *not* present in the metadata")
+    if not is_meeting_listed:
+        Console.log("Meeting is *not* listed in the metadata")
         return True
     # Meeting is present in the metadata, so we check if it is to be deleted (a partial or aborted meeting).
     if is_meeting_to_be_deleted:
-        Console.log("Meeting is to be deleted")
+        Console.log("Meeting is marked for deletion in the metadata")
         return True
     # Meeting is present in the metadata, and not to be deleted, so we check if it has been downloaded.
     if is_meeting_downloaded:
@@ -513,7 +513,6 @@ def main():
                 Console.warn("No recording files found for this meeting. Skipping.")
                 continue
 
-
             num_files_to_download = len(meeting_download_info)
             num_files_downloaded = 0
             Console.log(f"Found {num_files_to_download} file(s) for this meeting.")
@@ -550,7 +549,7 @@ def main():
         total_gb = total_bytes / (1024 * 1024 * 1024)
         Console.blue(f"\nTotal disk space required to download these meetings is: {total_gb:.2f} GB", True)
 
-    # ksp_metadata.save_metadata_changes()
+    ksp_metadata.save()
 
 
 def splash_screen():
