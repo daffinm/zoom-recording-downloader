@@ -25,12 +25,12 @@ import re as regex
 from datetime import timezone
 from zoneinfo import ZoneInfo
 
+
 # installed libraries
 import dateutil.parser as parser
 import pathvalidate as path_validate
 import requests
 import tqdm as progress_bar
-from numpy.f2py.auxfuncs import throw_error
 
 # Local imports
 from lib.console import Console
@@ -121,7 +121,7 @@ MEETING_FILEPATH_REPLACE_NEW = config(section=SECTION_KEY_FF, key="filepath_repl
 # ----------------------------------------------------
 # Metadata
 # ----------------------------------------------------
-ksp_metadata = MetadataDB("ksp/metadata/David_Wood_Zoom_Recordings-2022-11-06--2024-11-07.csv")
+ksp_metadata = MetadataDB("ksp/metadata/David_Wood_Zoom_Recordings-2022-11-06--2024-11-07 - Meetings.csv")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -136,6 +136,8 @@ def load_access_token():
     """
     OAuth function, thanks to https://github.com/freelimiter
     """
+    Console.bold("Loading access token...")
+
     url = f"https://zoom.us/oauth/token?grant_type=account_credentials&account_id={ACCOUNT_ID}"
 
     client_cred = f"{CLIENT_ID}:{CLIENT_SECRET}"
@@ -159,8 +161,8 @@ def load_access_token():
         }
     except KeyError:
         Console.error(f"### The key '{ACCESS_TOKEN}' wasn't found in the response.")
-        # system.exit(1)
-
+        system.exit(1)
+    Console.log(f"Access token loaded successfully.")
 
 def handle_graceful_shutdown(signal_received, frame):
     Console.info(f"\nSIGINT or CTRL-C detected. Exiting gracefully.")
@@ -183,7 +185,8 @@ def get_users():
 
     all_users = []
 
-    Console.log("Fetching user pages", end="", flush=True)
+    Console.bold("Getting user accounts")
+    Console.log("Fetching data.", end="", flush=True)
     for page in range(1, total_pages):
         url = f"{API_ENDPOINT_USER_LIST}?page_number={str(page)}"
         user_data = requests.get(url=url, headers=AUTHORIZATION_HEADER).json()
@@ -202,6 +205,9 @@ def get_users():
         #page += 1
         Console.log(".", end="", flush=True)
     Console.log()  # Move to the next line
+
+    Console.log(f"Got {len(all_users)} user accounts.")
+
     return all_users
 
 
@@ -242,7 +248,7 @@ def per_delta(start, end, delta):
 
 def get_meetings_for(user_id):
     recordings = []
-    Console.log(f"Fetching data for meetings between {START_DATE:%Y-%m-%d} and {END_DATE:%Y-%m-%d}:",
+    Console.log(f"Fetching data for meetings between {START_DATE:%Y-%m-%d} and {END_DATE:%Y-%m-%d}",
                 end="", flush=True)
     for start, end in per_delta(START_DATE, END_DATE, datetime.timedelta(days=30)):
         post_data = {
@@ -316,56 +322,30 @@ def download_meeting_file(download_url, filename, folder_name, recording_size):
 
 def should_ignore_user(email: str) -> bool:
     if USER_FILTER_INCLUDE and not any(fnmatch.fnmatch(email, pattern) for pattern in USER_FILTER_INCLUDE):
-        # Ignore if not mentioned in active include filter
+        # Ignore if filter is defined and user email does not match any patterns
         return True
     # Exclude cannot override include, so we check it last
     if USER_FILTER_EXCLUDE and any(fnmatch.fnmatch(email, pattern) for pattern in USER_FILTER_EXCLUDE):
-        # Ignore if mentioned in exclude filter
+        # Ignore if filter is defined and email matches any of the patterns
         return True
     # Default response is to NOT ignore the user
     return False
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# Strategies for filtering meetings and formatting file names
-# ----------------------------------------------------------------------------------------------------------------------
-# TODO New strategies for meeting filtering and file naming can be implemented here.
-
-def should_ignore_meeting_default(meeting: dict) -> bool:
+def should_ignore_meeting(meeting: dict) -> bool:
     meeting_topic = meeting.get("topic")
     if MEETING_FILTER_INCLUDE and not any(fnmatch.fnmatch(meeting_topic, pattern) for pattern in MEETING_FILTER_INCLUDE):
-        # Ignore if not mentioned in active include filter
+        # Ignore if filter is defined and topic does not match any patterns
         return True
     # Exclude cannot override include, so we check it last
     if MEETING_FILTER_EXCLUDE and any(fnmatch.fnmatch(meeting_topic, pattern) for pattern in MEETING_FILTER_EXCLUDE):
-        # Ignore if mentioned in exclude filter
+        # Ignore if filter is defined and topic matches any patterns
         return True
     # Default response is to NOT ignore the meeting
     return False
 
 
-def should_ignore_meeting(meeting: dict) -> bool:
-    # return should_ignore_meeting_default(meeting)
-    is_meeting_present = ksp_metadata.is_meeting_present(zoom_data=meeting)
-    is_meeting_downloaded = ksp_metadata.is_already_downloaded(zoom_data=meeting)
-    is_meeting_to_be_deleted = ksp_metadata.is_meeting_to_be_deleted(zoom_data=meeting)
-
-    if not is_meeting_present:
-        Console.warn("Meeting is not present in the metadata...")
-        return True
-    # Meeting is present in the metadata, so we check if it is to be deleted (a partial or aborted meeting).
-    if is_meeting_to_be_deleted:
-        Console.warn("Meeting is to be deleted...")
-        return True
-    # Meeting is present in the metadata, and not to be deleted, so we check if it has been downloaded.
-    if is_meeting_downloaded:
-        Console.warn("Meeting files already downloaded...")
-        return True
-    # Meeting is present in the metadata, and has not been downloaded.
-    return False
-
-
-def format_filename_default(meeting: dict, recording_file: dict) -> (str, str):
+def format_filename(meeting: dict, recording_file: dict) -> (str, str):
     file_extension = recording_file["file_extension"].lower()
     recording_id = recording_file["id"]
     recording_type = recording_file["recording_type"]
@@ -394,8 +374,31 @@ def format_filename_default(meeting: dict, recording_file: dict) -> (str, str):
 
     return folder_name, filename
 
+# ----------------------------------------------------------------------------------------------------------------------
+# Alternate Strategies for filtering meetings and formatting file names
+# ----------------------------------------------------------------------------------------------------------------------
+def should_ignore_meeting_alternate_strategy(meeting: dict) -> bool:
+    # return should_ignore_meeting_default(meeting)
+    is_meeting_present = ksp_metadata.is_meeting_present(zoom_data=meeting)
+    is_meeting_downloaded = ksp_metadata.is_already_downloaded(zoom_meeting_data=meeting)
+    is_meeting_to_be_deleted = ksp_metadata.is_meeting_to_be_deleted(zoom_meeting_data=meeting)
 
-def format_filename(meeting: dict, recording_file: dict) -> (str, str):
+    if not is_meeting_present:
+        Console.log("Meeting is *not* present in the metadata")
+        return True
+    # Meeting is present in the metadata, so we check if it is to be deleted (a partial or aborted meeting).
+    if is_meeting_to_be_deleted:
+        Console.log("Meeting is to be deleted")
+        return True
+    # Meeting is present in the metadata, and not to be deleted, so we check if it has been downloaded.
+    if is_meeting_downloaded:
+        Console.log("All files for this meeting have already downloaded")
+        return True
+    # Meeting is present in the metadata, and has not been downloaded.
+    return False
+
+
+def format_filename_alternate_strategy(meeting: dict, recording_file: dict) -> (str, str):
 
     # Use locally defined variables to format the filename and folder name -- **locals() is used to replace the variables
     # of the same name in the MEETING_FILENAME_FORMAT and MEETING_FOLDERNAME_FORMAT strings.
@@ -425,7 +428,7 @@ def format_filename(meeting: dict, recording_file: dict) -> (str, str):
     # ------------------------------------------------------------------------------------------------------------------
     # New variables used in the format strings from ksp meeting metadata
     # ------------------------------------------------------------------------------------------------------------------
-    metadata_for_this_meeting = ksp_metadata.find_csv_metadata_for(zoom_data=meeting)
+    metadata_for_this_meeting:MetadataDB.Row = ksp_metadata.find_csv_metadata_for(zoom_meeting_data=meeting)
     # Custom variables for the format strings
     language = metadata_for_this_meeting.language
     author = metadata_for_this_meeting.author
@@ -471,16 +474,13 @@ def main():
     )
     Console.bold(behaviour_message)
     try:
-        input("Press Enter to continue, or Ctrl+C to abort...")
+        input("Press Enter to continue, or Ctrl+C to abort? ")
     except KeyboardInterrupt:
         system.exit(0)
 
-    Console.bold("Loading access token...")
     load_access_token()
 
-    Console.bold("Getting user accounts...")
     users: list = get_users()
-    Console.log(f"Got {len(users)} user accounts.")
 
     Console.dark_cyan("\n>>> Processing list of users in this organisation:", True, True)
     total_bytes = 0
@@ -494,7 +494,8 @@ def main():
 
         Console.blue(f"\n>>>> Getting meetings for user {index_users}/{len(users)}: {first_name} {last_name} ({email})", True, True)
         meetings: list = get_meetings_for(user_id)
-        Console.log(f"Found {len(meetings)} meeting(s) for this user.")
+        Console.log(f"Found {len(meetings)} meeting(s) for this user in this period.")
+
 
         for index_meetings, meeting in enumerate(meetings, start=1):
             meeting_topic = meeting.get("topic", "No Topic")
@@ -502,7 +503,7 @@ def main():
             Console.bold(f"\n{first_name} {last_name} ({email}) meeting {index_meetings}/{len(meetings)}: {meeting_topic} ({meeting_time})")
 
             # --- TODO switch strategy for filtering meetings ---
-            if should_ignore_meeting(meeting):
+            if should_ignore_meeting_alternate_strategy(meeting):
                 Console.warn("Ignoring meeting!")
                 continue
 
@@ -523,7 +524,7 @@ def main():
                     continue
 
                 # --- ToDO switch strategy for naming files and folders ---
-                folder_name, filename = format_filename(meeting=meeting, recording_file=recording_file)
+                folder_name, filename = format_filename_alternate_strategy(meeting=meeting, recording_file=recording_file)
 
                 Console.log(
                     f"==> {BEHAVIOUR_MODE_VERB} file {file_number}/{len(meeting_download_info)}: type={recording_file['recording_type']}, dest={filename}")
@@ -549,7 +550,7 @@ def main():
         total_gb = total_bytes / (1024 * 1024 * 1024)
         Console.blue(f"\nTotal disk space required to download these meetings is: {total_gb:.2f} GB", True)
 
-    ksp_metadata.save_metadata_changes()
+    # ksp_metadata.save_metadata_changes()
 
 
 def splash_screen():
@@ -572,7 +573,6 @@ def splash_screen():
                         Zoom Recording Downloader
 
                             Version {APP_VERSION}
-        
     """, True)
 
 
