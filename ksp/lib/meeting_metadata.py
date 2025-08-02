@@ -3,8 +3,6 @@ import pandas as pd
 from pandas import DataFrame
 from zoneinfo import ZoneInfo
 
-from lib.console import Console
-
 
 class CsvFile:
     class Columns:
@@ -14,29 +12,37 @@ class CsvFile:
         MEETING_TOPIC = 'Topic'
         MEETING_ID = 'ID'
         MEETING_START_TIME = 'Start_Time'
-        MEETING_START_TIME_TZ = 'Start_Time_TZ' # Timezone-aware datetime object for the meeting start time
-        MEETING_FILE_SIZE = 'File_Size_MB'
-        MEETING_TYPE = "Type"
-        BOOK_AUTHOR = 'Author'
+        AUTHOR = 'Author'
         BOOK_TITLE = 'Book_Title'
+        LANGUAGE = 'Language'
         BOOK_ID = 'Book_ID'
+        BOOK_CHAPTERS = 'Chapters'
         GROUP_ID = 'Group_ID'
         ACTION = 'Action'
-        SESSION = 'Session'
-        BOOK_CHAPTERS = 'Chapters'
-        MEETING_YEAR = 'Year'
         MEETING_FILES_DOWNLOADED = 'Downloaded'
-        MEETING_FILES_UPLOADED = 'Uploaded'
-        MEETING_FILES_VERIFIED = 'Verified'
-        DELETED_FROM_ZOOM = 'Deleted_from_Zoom'
-        # Adds this column
-        STATUS = 'Status'
 
     class Values:
-        STATUS_YES = 'YES'
-        STATUS_NO = ''
-        ACTION_DELETE = 'Delete'
+        YES = "YES"
+        NO = "NO"
+        DELETE = 'Delete'
+        IGNORE = 'Ignore'
 
+    @staticmethod
+    def required_columns():
+        """
+        Returns a list of metadata columns that must have a value in the CSV metadata file.
+        :return:
+        """
+        return [
+            CsvFile.Columns.MEETING_ID,
+            CsvFile.Columns.MEETING_START_TIME,
+            CsvFile.Columns.AUTHOR,
+            CsvFile.Columns.BOOK_TITLE,
+            CsvFile.Columns.LANGUAGE,
+            CsvFile.Columns.BOOK_ID,
+            CsvFile.Columns.BOOK_CHAPTERS,
+            CsvFile.Columns.GROUP_ID,
+        ]
 
 class TimeInfo:
     class Zoom:
@@ -104,37 +110,50 @@ class MetadataDB:
     class Row:
 
         def __init__(self, csv_data: DataFrame):
+            if csv_data is None:
+                raise ValueError("csv_data cannot be None")
             if not isinstance(csv_data, DataFrame):
-                raise TypeError("csv_data must be a DataFrame.")
-            self._csv_data:DataFrame = csv_data
+                raise TypeError("If specified csv_data must be a pandas DataFrame")
+            self._csv_data = csv_data
+            # If not an empty DataFrame then validate that all cells in the important columns are not empty
+            if not self._csv_data.empty:
+                if self.action not in [CsvFile.Values.DELETE, CsvFile.Values.IGNORE]:
+                    for column in CsvFile.required_columns():
+                        if self._csv_data[column].isnull().any() or (self._csv_data[column] == '').any():
+                            raise ValueError(f"csv_data: column '{column}' contains empty values")
+
 
         @property
-        def size(self) -> int:
-            return len(self._csv_data)
+        def empty(self) -> bool:
+            return self._csv_data.empty
 
         @property
         def language(self) -> str:
-            return self._csv_data["Language"].iloc[0]
+            return self._csv_data[CsvFile.Columns.LANGUAGE].iloc[0]
 
         @property
         def author(self) -> str:
-            return self._csv_data["Author"].iloc[0]
+            return self._csv_data[CsvFile.Columns.AUTHOR].iloc[0]
 
         @property
         def book_id(self) -> str:
-            return self._csv_data["Book_ID"].iloc[0]
+            return self._csv_data[CsvFile.Columns.BOOK_ID].iloc[0]
 
         @property
         def book_title(self) -> str:
-            return self._csv_data["Book_Title"].iloc[0]
+            return self._csv_data[CsvFile.Columns.BOOK_TITLE].iloc[0]
 
         @property
         def chapters(self) -> str:
-            return self._csv_data["Chapters"].iloc[0]
+            return self._csv_data[CsvFile.Columns.BOOK_CHAPTERS].iloc[0]
 
         @property
         def group_id(self) -> str:
-            return self._csv_data["Group_ID"].iloc[0]
+            return self._csv_data[CsvFile.Columns.GROUP_ID].iloc[0]
+
+        @property
+        def action(self) -> str:
+            return self._csv_data[CsvFile.Columns.ACTION].iloc[0]
 
 
     # Constructor!
@@ -145,9 +164,28 @@ class MetadataDB:
         except FileNotFoundError:
             print(f"csv metadata file not found: {csv_path}")
             exit(1)
+        except pd.errors.EmptyDataError:
+            print(f"csv metadata file is empty: {csv_path}")
+            exit(1)
+        # Validate that the required columns are present in the DataFrame
+        for column in CsvFile.required_columns():
+            if column not in self.metadata_file.columns:
+                raise ValueError(f"Metadata file is missing required column '{column}'")
+
 
 
     def _find_meeting(self, meeting:ZoomMeetingWrapper, criteria:dict=None) -> pd.DataFrame:
+        """
+        Returns a one row DataFrame containing the metadata for the specified meeting if it exists in the metadata file.
+        If criteria is provided, it will filter the results based on the criteria
+        If no matching meeting is found, returns None.
+        :param meeting: wrapper object containing the meeting data.
+        :param criteria: optional dictionary of additional search criteria to filter the results.
+        :return: None if no matching meeting found, otherwise a DataFrame with the matching meeting metadata.
+        :raises TypeError: If criteria is not a dictionary.
+        :raises ValueError: If criteria contains a column that does not exist in the metadata file.
+        :raises ValueError: If multiple meetings are found with the same ID and start time (should be unique).
+        """
         # Validate the criteria if provided
         if not criteria is None:
             if not isinstance(criteria, dict):
@@ -160,11 +198,11 @@ class MetadataDB:
         # Find all the metadata rows that match the meeting ID...
         subset_all_meeting_instances = self.metadata_file[self.metadata_file[CsvFile.Columns.MEETING_ID] == meeting.id]
         if subset_all_meeting_instances.empty:
-            raise ValueError(f"No meetings found with ID {meeting.id}")
+            return subset_all_meeting_instances
 
         # Convert the subset Start_Time col to datetime object that uses the correct timezone according to Zoom
-        subset_all_meeting_instances_converted = subset_all_meeting_instances.copy()
-        subset_all_meeting_instances_converted[CsvFile.Columns.MEETING_START_TIME] = pd.to_datetime(
+        subset_all_meeting_instances_datetime = subset_all_meeting_instances.copy()
+        subset_all_meeting_instances_datetime[CsvFile.Columns.MEETING_START_TIME] = pd.to_datetime(
             subset_all_meeting_instances[CsvFile.Columns.MEETING_START_TIME],
             format=TimeInfo.CSV.FORMAT
         ).dt.tz_localize(meeting.timezone)
@@ -179,26 +217,30 @@ class MetadataDB:
 
         # Start with a mask that is True for all rows of the subset DataFrame
         # This mask will be used to filter the DataFrame based on the search criteria
-        mask = pd.Series(True, index=subset_all_meeting_instances_converted.index)
+        mask = pd.Series(True, index=subset_all_meeting_instances_datetime.index)
 
         # Sequentially apply each criterion to the mask
         for search_column, search_value in full_search_criteria.items():
             # Check if the search column is a pandas datetime column
-            if pd.api.types.is_datetime64_any_dtype(subset_all_meeting_instances_converted[search_column]):
-                mask &= subset_all_meeting_instances_converted[search_column] == pd.Timestamp(search_value)
+            if pd.api.types.is_datetime64_any_dtype(subset_all_meeting_instances_datetime[search_column]):
+                mask &= subset_all_meeting_instances_datetime[search_column] == pd.Timestamp(search_value)
             # Check if the search value is a list in which case we want to check if the column values are in that list
             elif isinstance(search_value, list):
-                mask &= subset_all_meeting_instances_converted[search_column].isin(search_value)
+                mask &= subset_all_meeting_instances_datetime[search_column].isin(search_value)
             # Otherwise, we assume the search value is a single value to match against
             else:
-                mask &= subset_all_meeting_instances_converted[search_column] == search_value
+                mask &= subset_all_meeting_instances_datetime[search_column] == search_value
 
         # Return only the rows from the subset where the mask is True
-        result = subset_all_meeting_instances_converted[mask]
+        result:DataFrame = subset_all_meeting_instances_datetime[mask]
 
-        assert len(result) == 0 or len(result) == 1, \
-            f"Data integrity error: Found {len(result)} meetings with ID {meeting.id} and start time {meeting.start_time}. Expected 0 or 1."
-
+        num_results = len(result)
+        if num_results > 1:
+            raise ValueError(
+                f"Data integrity error: Found {num_results} meetings with ID {meeting.id} and start time {meeting.start_time}. "
+                "Expected 0 or 1. This indicates a problem with the metadata file."
+            )
+        # Could be empty if no meetings match the criteria
         return result
 
 
@@ -209,37 +251,17 @@ class MetadataDB:
         return metadata
 
 
-    def is_meeting_listed(self, zoom_data:dict) -> bool:
-        csv_metadata = self.find_csv_metadata_for(zoom_data)
-        num_meetings = csv_metadata.size
+    def should_ignore_meeting(self, zoom_meeting_data:dict) -> bool:
+        zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
+        matching_meetings = self._find_meeting(zoom_meeting_wrapper)
+        row = MetadataDB.Row(matching_meetings)
 
-        if num_meetings == 0:
-            return False
-        if num_meetings == 1:
+        if row.empty:
             return True
-        # This block is only reached if num_meetings > 1
-        raise ValueError(
-            f"Data integrity error: Found {num_meetings} meetings. Expected 0 or 1:\n"
-            f"{csv_metadata}"
-        )
+        if row.action == CsvFile.Values.IGNORE or row.action == CsvFile.Values.DELETE:
+            return True
 
-
-    def is_already_downloaded(self, zoom_meeting_data:dict) -> bool:
-        zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
-        criteria = {
-            CsvFile.Columns.MEETING_FILES_DOWNLOADED: CsvFile.Values.STATUS_YES
-        }
-        matching_meetings = self._find_meeting(zoom_meeting_wrapper, criteria)
-        return not matching_meetings.empty
-
-
-    def is_meeting_to_be_deleted(self, zoom_meeting_data:dict) -> bool:
-        zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
-        criteria = {
-            CsvFile.Columns.ACTION: CsvFile.Values.ACTION_DELETE
-        }
-        matching_meetings = self._find_meeting(zoom_meeting_wrapper, criteria)
-        return not matching_meetings.empty
+        return False
 
 
     def mark_as_downloaded(self, zoom_meeting_data:dict):
@@ -248,7 +270,7 @@ class MetadataDB:
 
         if not matching_meeting.empty:
             idx = matching_meeting.index[0]
-            self.metadata_file.loc[idx, CsvFile.Columns.MEETING_FILES_DOWNLOADED] = CsvFile.Values.STATUS_YES
+            self.metadata_file.loc[idx, CsvFile.Columns.MEETING_FILES_DOWNLOADED] = CsvFile.Values.YES
         else:
             print(
                 f"Warning: Meeting with ID {zoom_meeting_wrapper.id} and start time {zoom_meeting_wrapper.start_time} not found.")

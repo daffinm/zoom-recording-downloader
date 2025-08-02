@@ -19,6 +19,7 @@ import datetime
 import fnmatch
 import json
 import os
+import shutil
 import signal
 import sys as system
 import re as regex
@@ -39,7 +40,7 @@ from meeting_metadata import MetadataDB
 # ----------------------------------------------------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------------------------------------------------
-APP_VERSION = "3.1 (Blarf)"
+APP_VERSION = "4.0 (KSP)"
 API_ENDPOINT_USER_LIST = "https://api.zoom.us/v2/users"
 RECORDING_FILE_INCOMPLETE = "incomplete"
 # ----------------------------------------------------
@@ -288,7 +289,15 @@ def download_meeting_file(download_url, filename, folder_name, recording_size):
 
     # Download recording file.
     response = requests.get(download_url, stream=True)
-
+    if not response.ok:
+        Console.error(f"Download failed with status code: {response.status_code}")
+        if response.status_code == 401:
+            Console.error("Unauthorized: Check your access token.")
+        elif response.status_code == 404:
+            Console.error("File not found: The URL may be incorrect.")
+        else:
+            Console.error(f"Unexpected error: {response.reason}")
+        return False
     # total size in bytes.
     content_length = int(response.headers.get("content-length", 0))
     block_size = 32 * 1024  # 32 Kilobytes
@@ -378,24 +387,7 @@ def format_filename(meeting: dict, recording_file: dict) -> (str, str):
 # Alternate Strategies for filtering meetings and formatting file names
 # ----------------------------------------------------------------------------------------------------------------------
 def should_ignore_meeting_alternate_strategy(meeting: dict) -> bool:
-    # return should_ignore_meeting_default(meeting)
-    is_meeting_listed = ksp_metadata.is_meeting_listed(zoom_data=meeting)
-    is_meeting_downloaded = ksp_metadata.is_already_downloaded(zoom_meeting_data=meeting)
-    is_meeting_to_be_deleted = ksp_metadata.is_meeting_to_be_deleted(zoom_meeting_data=meeting)
-
-    if not is_meeting_listed:
-        Console.log("Meeting is *not* listed in the metadata")
-        return True
-    # Meeting is present in the metadata, so we check if it is to be deleted (a partial or aborted meeting).
-    if is_meeting_to_be_deleted:
-        Console.log("Meeting is marked for deletion in the metadata")
-        return True
-    # Meeting is present in the metadata, and not to be deleted, so we check if it has been downloaded.
-    if is_meeting_downloaded:
-        Console.log("All files for this meeting have already downloaded")
-        return True
-    # Meeting is present in the metadata, and has not been downloaded.
-    return False
+    return ksp_metadata.should_ignore_meeting(zoom_meeting_data=meeting)
 
 
 def format_filename_alternate_strategy(meeting: dict, recording_file: dict) -> (str, str):
@@ -427,6 +419,7 @@ def format_filename_alternate_strategy(meeting: dict, recording_file: dict) -> (
 
     # ------------------------------------------------------------------------------------------------------------------
     # New variables used in the format strings from ksp meeting metadata
+    #  FIXME check for nan indicating that the metadata is not available for this meeting.
     # ------------------------------------------------------------------------------------------------------------------
     metadata_for_this_meeting:MetadataDB.Row = ksp_metadata.find_csv_metadata_for(zoom_meeting_data=meeting)
     # Custom variables for the format strings
@@ -496,7 +489,7 @@ def main():
         meetings: list = get_meetings_for(user_id)
         Console.log(f"Found {len(meetings)} meeting(s) for this user in this period.")
 
-
+        # TODO check that we have enough disk space to download the recordings, report, and proceed if we do.
         for index_meetings, meeting in enumerate(meetings, start=1):
             meeting_topic = meeting.get("topic", "No Topic")
             meeting_time = meeting.get("start_time", "Unknown Time")
@@ -533,23 +526,36 @@ def main():
                                           filename=filename,
                                           folder_name=folder_name,
                                           recording_size=recording_file["file_size"]):
-                        Console.log(f"File {file_number}/{num_files_to_download} has been downloaded.")
+                        Console.green(f"File {file_number}/{num_files_to_download} has been downloaded.")
                         num_files_downloaded += 1
+                        if num_files_to_download == num_files_downloaded:
+                            Console.green(f"All files for this meeting have been downloaded.", bold=True,
+                                          underline=False)
+                            # FIXME remove this custom insertion - non-default behaviour
+                            ksp_metadata.mark_as_downloaded(meeting)
+                    else:
+                        Console.error(f"File {file_number}/{num_files_to_download} could not be downloaded.")
+                        # TODO? ksp_metadata.mark_as_failed(meeting)
                 else:
                     total_bytes += recording_file["file_size"]
-            if num_files_downloaded == num_files_to_download:
-                Console.green(f"All files for this meeting have been downloaded.", bold=True, underline=True)
-                # FIXME remove this custom insertion - non-default behaviour
-                ksp_metadata.mark_as_downloaded(meeting)
+
 
     Console.green(f"\n{'*' * 24 } All done! {'*' * 24 }", True, False)
     if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
         Console.blue(f"\nRecordings saved to: {os.path.abspath(DOWNLOAD_DIRECTORY)}\n")
+        ksp_metadata.save()
     else:
         total_gb = total_bytes / (1024 * 1024 * 1024)
-        Console.blue(f"\nTotal disk space required to download these meetings is: {total_gb:.2f} GB", True)
+        usage = shutil.disk_usage(DOWNLOAD_DIRECTORY)
+        disk_space_gb = usage.free / (1024 * 1024 * 1024)
+        Console.blue("\nDisk Space Report:", True, True)
+        Console.blue(f"Required : {total_gb:.2f} GB\nAvailable: {disk_space_gb:.2f} GB", True)
 
-    ksp_metadata.save()
+        if total_gb >= disk_space_gb:
+            Console.error(f"Not enough disk space!")
+            system.exit(1)
+        Console.green("You have enough disk space to download the recordings.")
+
 
 
 def splash_screen():
