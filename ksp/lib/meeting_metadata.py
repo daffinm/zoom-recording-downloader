@@ -2,7 +2,7 @@ from datetime import datetime
 import pandas as pd
 from pandas import DataFrame
 from zoneinfo import ZoneInfo
-
+from lib.console import Console
 
 class CsvFile:
     class Columns:
@@ -19,7 +19,7 @@ class CsvFile:
         BOOK_CHAPTERS = 'Chapters'
         GROUP_ID = 'Group_ID'
         ACTION = 'Action'
-        MEETING_FILES_DOWNLOADED = 'Downloaded'
+        DOWNLOADED = 'Downloaded'
 
     class Values:
         YES = "YES"
@@ -54,7 +54,6 @@ class TimeInfo:
 
 
 class ZoomMeetingWrapper:
-    _UUID = "uuid"  # Unique identifier for instance of the meeting
     _ID = "id"  # Recurring Meeting ID
     _TOPIC = "topic"
     _START_TIME = "start_time"  # Start time of the meeting
@@ -66,16 +65,16 @@ class ZoomMeetingWrapper:
         self._data = raw_meeting_data
 
     @property
-    def uuid(self) -> str:
-        return self._data[self._UUID]
-
-    @property
     def id(self) -> str:
         meeting_id = self._data[self._ID]
-        meeting_id = "{:011d}".format(meeting_id)
-        meeting_id = f"{meeting_id[:3]} {meeting_id[3:7]} {meeting_id[7:]}"
-
-        return meeting_id
+        meeting_id_str = str(meeting_id)
+        if len(meeting_id_str) == 11:
+            meeting_id_formatted = f"{meeting_id_str[:3]} {meeting_id_str[3:7]} {meeting_id_str[7:]}"
+            return meeting_id_formatted
+        elif len(meeting_id_str) == 10:
+            meeting_id_formatted = f"{meeting_id_str[:3]} {meeting_id_str[3:6]} {meeting_id_str[6:]}"
+            return meeting_id_formatted
+        raise ValueError("Meeting ID must be 10 or 11 digits long.")
 
     @property
     def topic(self) -> str:
@@ -154,6 +153,10 @@ class MetadataDB:
         @property
         def action(self) -> str:
             return self._csv_data[CsvFile.Columns.ACTION].iloc[0]
+
+        @property
+        def downloaded(self) -> str:
+            return self._csv_data[CsvFile.Columns.DOWNLOADED].iloc[0]
 
 
     # Constructor!
@@ -257,8 +260,14 @@ class MetadataDB:
         row = MetadataDB.Row(matching_meetings)
 
         if row.empty:
+            Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: No metadata found.")
             return True
         if row.action == CsvFile.Values.IGNORE or row.action == CsvFile.Values.DELETE:
+            Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: Action={row.action}")
+            return True
+        # This means we can delete files from disk after uploading them and then move on to the next batch.
+        if row.downloaded == CsvFile.Values.YES:
+            Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: Downloaded={row.downloaded}")
             return True
 
         return False
@@ -270,10 +279,10 @@ class MetadataDB:
 
         if not matching_meeting.empty:
             idx = matching_meeting.index[0]
-            self.metadata_file.loc[idx, CsvFile.Columns.MEETING_FILES_DOWNLOADED] = CsvFile.Values.YES
+            self.metadata_file.loc[idx, CsvFile.Columns.DOWNLOADED] = CsvFile.Values.YES
         else:
-            print(
-                f"Warning: Meeting with ID {zoom_meeting_wrapper.id} and start time {zoom_meeting_wrapper.start_time} not found.")
+            raise ValueError(
+                f"Cannot mark as downloaded. Meeting ID=[{zoom_meeting_wrapper.id}], start_time={zoom_meeting_wrapper.start_time} not found in metadata.")
 
 
     def save(self):

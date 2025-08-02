@@ -492,8 +492,9 @@ def main():
         # TODO check that we have enough disk space to download the recordings, report, and proceed if we do.
         for index_meetings, meeting in enumerate(meetings, start=1):
             meeting_topic = meeting.get("topic", "No Topic")
+            meeting_id = meeting.get("id", "No ID")
             meeting_time = meeting.get("start_time", "Unknown Time")
-            Console.bold(f"\n{first_name} {last_name} ({email}) meeting {index_meetings}/{len(meetings)}: {meeting_topic} ({meeting_time})")
+            Console.bold(f"\n{first_name} {last_name} ({email}) meeting {index_meetings}/{len(meetings)}: {meeting_topic}/{meeting_id}/{meeting_time}")
 
             # --- TODO switch strategy for filtering meetings ---
             if should_ignore_meeting_alternate_strategy(meeting):
@@ -527,7 +528,9 @@ def main():
                                           folder_name=folder_name,
                                           recording_size=recording_file["file_size"]):
                         Console.green(f"File {file_number}/{num_files_to_download} has been downloaded.")
+
                         num_files_downloaded += 1
+
                         if num_files_to_download == num_files_downloaded:
                             Console.green(f"All files for this meeting have been downloaded.", bold=True,
                                           underline=False)
