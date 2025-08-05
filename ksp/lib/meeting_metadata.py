@@ -20,6 +20,8 @@ class CsvFile:
         GROUP_ID = 'Group_ID'
         ACTION = 'Action'
         DOWNLOADED = 'Downloaded'
+        FOLDER_NAME = 'Folder_Name'
+        BASE_FILENAME = 'Base_Filename'
 
     class Values:
         YES = "YES"
@@ -41,7 +43,7 @@ class CsvFile:
             CsvFile.Columns.LANGUAGE,
             CsvFile.Columns.BOOK_ID,
             CsvFile.Columns.BOOK_CHAPTERS,
-            CsvFile.Columns.GROUP_ID,
+            CsvFile.Columns.GROUP_ID
         ]
 
 class TimeInfo:
@@ -273,13 +275,15 @@ class MetadataDB:
         return False
 
 
-    def mark_as_downloaded(self, zoom_meeting_data:dict):
+    def mark_as_downloaded(self, zoom_meeting_data:dict, folder_name:str, filename:str):
         zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
         matching_meeting = self._find_meeting(zoom_meeting_wrapper)
 
         if not matching_meeting.empty:
             idx = matching_meeting.index[0]
             self.metadata_file.loc[idx, CsvFile.Columns.DOWNLOADED] = CsvFile.Values.YES
+            self.metadata_file.loc[idx, CsvFile.Columns.FOLDER_NAME] = folder_name
+            self.metadata_file.loc[idx, CsvFile.Columns.BASE_FILENAME] = filename.rsplit('.', 1)[0]
         else:
             raise ValueError(
                 f"Cannot mark as downloaded. Meeting ID=[{zoom_meeting_wrapper.id}], start_time={zoom_meeting_wrapper.start_time} not found in metadata.")

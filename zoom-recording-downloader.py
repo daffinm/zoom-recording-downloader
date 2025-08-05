@@ -421,14 +421,14 @@ def format_filename_alternate_strategy(meeting: dict, recording_file: dict) -> (
     # New variables used in the format strings from ksp meeting metadata
     #  FIXME check for nan indicating that the metadata is not available for this meeting.
     # ------------------------------------------------------------------------------------------------------------------
-    metadata_for_this_meeting:MetadataDB.Row = ksp_metadata.find_csv_metadata_for(zoom_meeting_data=meeting)
+    additional_metadata:MetadataDB.Row = ksp_metadata.find_csv_metadata_for(zoom_meeting_data=meeting)
     # Custom variables for the format strings
-    language = metadata_for_this_meeting.language
-    author = metadata_for_this_meeting.author
-    book_id = metadata_for_this_meeting.book_id
-    book_title = metadata_for_this_meeting.book_title
-    chapters = metadata_for_this_meeting.chapters
-    group_id = metadata_for_this_meeting.group_id
+    language = additional_metadata.language
+    author = additional_metadata.author
+    book_id = additional_metadata.book_id
+    book_title = additional_metadata.book_title
+    chapters = additional_metadata.chapters
+    group_id = additional_metadata.group_id
     start_time = meeting_time
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -480,7 +480,7 @@ def main():
 
     # for email, user_id, first_name, last_name in users:
     for index_users, (email, user_id, first_name, last_name) in enumerate(users, start=1):
-        # --- Use the strategy for filtering users ---
+
         if should_ignore_user(email):
             Console.warn(f"\n>>>> Ignoring meetings for user {index_users}/{len(users)}: {first_name} {last_name} ({email})", True)
             continue
@@ -535,7 +535,7 @@ def main():
                             Console.green(f"All files for this meeting have been downloaded.", bold=True,
                                           underline=False)
                             # FIXME remove this custom insertion - non-default behaviour
-                            ksp_metadata.mark_as_downloaded(meeting)
+                            ksp_metadata.mark_as_downloaded(meeting, folder_name, filename)
                     else:
                         Console.error(f"File {file_number}/{num_files_to_download} could not be downloaded.")
                         # TODO? ksp_metadata.mark_as_failed(meeting)
