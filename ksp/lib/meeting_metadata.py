@@ -22,6 +22,7 @@ class CsvFile:
         DOWNLOADED = 'Downloaded'
         FOLDER_NAME = 'Folder_Name'
         BASE_FILENAME = 'Base_Filename'
+        NOTES = 'Notes'
 
     class Values:
         YES = "YES"
@@ -176,6 +177,9 @@ class MetadataDB:
         for column in CsvFile.required_columns():
             if column not in self.metadata_file.columns:
                 raise ValueError(f"Metadata file is missing required column '{column}'")
+        # Add any missing columns with default values
+        if CsvFile.Columns.NOTES not in self.metadata_file.columns:
+            self.metadata_file[CsvFile.Columns.NOTES] = ""
 
 
 
@@ -268,9 +272,9 @@ class MetadataDB:
             Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: Action={row.action}")
             return True
         # This means we can delete files from disk after uploading them and then move on to the next batch.
-        if row.downloaded == CsvFile.Values.YES:
-            Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: Downloaded={row.downloaded}")
-            return True
+        # if row.downloaded == CsvFile.Values.YES:
+        #     Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: Downloaded={row.downloaded}")
+        #     return True
 
         return False
 
@@ -288,6 +292,19 @@ class MetadataDB:
             raise ValueError(
                 f"Cannot mark as downloaded. Meeting ID=[{zoom_meeting_wrapper.id}], start_time={zoom_meeting_wrapper.start_time} not found in metadata.")
 
+    def mark_as_short(self, zoom_meeting_data:dict, duration_minutes:float):
+        zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
+        matching_meeting = self._find_meeting(zoom_meeting_wrapper)
+
+        if not matching_meeting.empty:
+            idx = matching_meeting.index[0]
+            self.metadata_file.loc[idx, CsvFile.Columns.NOTES] = f"Short meeting: {duration_minutes} minutes. Consider deleting/ignoring."
+        else:
+            raise ValueError(
+                f"Cannot mark as short meeting. Meeting ID=[{zoom_meeting_wrapper.id}], start_time={zoom_meeting_wrapper.start_time} not found in metadata.")
+
 
     def save(self):
         self.metadata_file.to_csv(self.filepath, index=False)
+        Console.blue(f"Metadata file saved to {self.filepath}")
+

@@ -24,6 +24,7 @@ import signal
 import sys as system
 import re as regex
 from datetime import timezone
+from typing import Final
 from zoneinfo import ZoneInfo
 
 
@@ -40,9 +41,9 @@ from meeting_metadata import MetadataDB
 # ----------------------------------------------------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------------------------------------------------
-APP_VERSION = "4.0 (KSP)"
-API_ENDPOINT_USER_LIST = "https://api.zoom.us/v2/users"
-RECORDING_FILE_INCOMPLETE = "incomplete"
+APP_VERSION:Final = "4.0 (KSP)"
+API_ENDPOINT_USER_LIST:Final = "https://api.zoom.us/v2/users"
+RECORDING_FILE_INCOMPLETE:Final = "incomplete"
 # ----------------------------------------------------
 # Load the configuration file
 # The configuration file is expected to be in the same directory as this script.
@@ -65,62 +66,63 @@ def config(section:str, key:str, default:str):
 # OAuth
 # ----------------------------------------------------
 # These values are required for OAuth authentication with Zoom API.
-SECTION_KEY_OAUTH = "OAuth"
-ACCOUNT_ID = config(section=SECTION_KEY_OAUTH, key="account_id", default=LookupError)
-CLIENT_ID = config(section=SECTION_KEY_OAUTH, key="client_id", default=LookupError)
-CLIENT_SECRET = config(section=SECTION_KEY_OAUTH, key="client_secret", default=LookupError)
+SECTION_KEY_OAUTH:Final = "OAuth"
+ACCOUNT_ID:Final = config(section=SECTION_KEY_OAUTH, key="account_id", default=LookupError)
+CLIENT_ID:Final = config(section=SECTION_KEY_OAUTH, key="client_id", default=LookupError)
+CLIENT_SECRET:Final = config(section=SECTION_KEY_OAUTH, key="client_secret", default=LookupError)
 # ----------------------------------------------------
 # Storage
 # ----------------------------------------------------
-DOWNLOAD_DIRECTORY = config("Storage", "download_dir", 'downloads')
+DOWNLOAD_DIRECTORY:Final = config("Storage", "download_dir", 'downloads')
 # ----------------------------------------------------
 # DateInterval - time period for which to download recordings
 # ----------------------------------------------------
-SECTION_KEY_DATE_INTERVAL = "DateInterval"
-START_YEAR = config(section=SECTION_KEY_DATE_INTERVAL, key="start_year", default=datetime.date.today().year)
-START_MONTH = config(section=SECTION_KEY_DATE_INTERVAL, key="start_month", default=1)
-START_DAY = config(section=SECTION_KEY_DATE_INTERVAL, key="start_day", default=1)
-START_DATE = parser.parse(config(section=SECTION_KEY_DATE_INTERVAL, key="start_date", default=f"{START_YEAR}-{START_MONTH}-{START_DAY}"))
-END_DATE = parser.parse(config(section=SECTION_KEY_DATE_INTERVAL, key="end_date", default=str(datetime.date.today())))
+SECTION_KEY_DATE_INTERVAL:Final = "DateInterval"
+START_YEAR:Final = config(section=SECTION_KEY_DATE_INTERVAL, key="start_year", default=datetime.date.today().year)
+START_MONTH:Final = config(section=SECTION_KEY_DATE_INTERVAL, key="start_month", default=1)
+START_DAY:Final = config(section=SECTION_KEY_DATE_INTERVAL, key="start_day", default=1)
+START_DATE:Final = parser.parse(config(section=SECTION_KEY_DATE_INTERVAL, key="start_date", default=f"{START_YEAR}-{START_MONTH}-{START_DAY}"))
+END_DATE:Final = parser.parse(config(section=SECTION_KEY_DATE_INTERVAL, key="end_date", default=str(datetime.date.today())))
 # ----------------------------------------------------
 # Behaviour: download files or just size things up?
 # ----------------------------------------------------
-BEHAVIOUR_MODE_DOWNLOAD = "download"
-BEHAVIOUR_MODE_SIZE = "size"
-BEHAVIOUR_MODES = [BEHAVIOUR_MODE_DOWNLOAD, BEHAVIOUR_MODE_SIZE]
-BEHAVIOUR_MODE = config("Behaviour", "mode", BEHAVIOUR_MODE_DOWNLOAD)
+BEHAVIOUR_MODE_DOWNLOAD:Final = "download"
+BEHAVIOUR_MODE_SIZE:Final = "size"
+BEHAVIOUR_MODES:Final = [BEHAVIOUR_MODE_DOWNLOAD, BEHAVIOUR_MODE_SIZE]
+BEHAVIOUR_MODE:Final = config("Behaviour", "mode", BEHAVIOUR_MODE_DOWNLOAD)
 if BEHAVIOUR_MODE not in BEHAVIOUR_MODES:
     Console.error(f"Unknown Behaviour mode: {BEHAVIOUR_MODE}")
     exit(1)
-BEHAVIOUR_MODE_VERB = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD else "Sizing"
+BEHAVIOUR_MODE_VERB:Final = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD else "Sizing"
+MINIMUM_DURATION:Final = config("Behaviour", "min_duration_warning", 30)  # in minutes
 # ----------------------------------------------------
 # UserFilter: filtering users based on email addresses
 # ----------------------------------------------------
-USER_FILTER_INCLUDE = config("UserFilter", "emails_to_include", [])
-USER_FILTER_EXCLUDE = config("UserFilter", "emails_to_exclude", [])
+USER_FILTER_INCLUDE:Final = config("UserFilter", "emails_to_include", [])
+USER_FILTER_EXCLUDE:Final = config("UserFilter", "emails_to_exclude", [])
 # ----------------------------------------------------
 # MeetingFilter: filtering meetings based on topics
 # ----------------------------------------------------
-MEETING_FILTER_INCLUDE = config("MeetingFilter", "topics_to_include", [])
-MEETING_FILTER_EXCLUDE = config("MeetingFilter", "topics_to_exclude", [])
+MEETING_FILTER_INCLUDE:Final = config("MeetingFilter", "topics_to_include", [])
+MEETING_FILTER_EXCLUDE:Final = config("MeetingFilter", "topics_to_exclude", [])
 # ----------------------------------------------------
 # FilepathFormat: formatting the file and folder names
 # ----------------------------------------------------
-SECTION_KEY_FF = "FilepathFormat"
-DEFAULT_TIMEZONE = "UTC"
-DEFAULT_TIME_FORMAT = "%Y.%m.%d - %I.%M %p"
-DEFAULT_FILENAME_FORMAT = "{meeting_time} - {topic} - {rec_type} - {recording_id}.{file_extension}"
-DEFAULT_FOLDERNAME_FORMAT = "{topic} - {meeting_time}"
+SECTION_KEY_FF:Final = "FilepathFormat"
+DEFAULT_TIMEZONE:Final = "UTC"
+DEFAULT_TIME_FORMAT:Final = "%Y.%m.%d - %I.%M %p"
+DEFAULT_FILENAME_FORMAT:Final = "{meeting_time} - {topic} - {rec_type} - {recording_id}.{file_extension}"
+DEFAULT_FOLDERNAME_FORMAT:Final = "{topic} - {meeting_time}"
 #
-MEETING_TIMEZONE = ZoneInfo(config(section=SECTION_KEY_FF, key="timezone", default=DEFAULT_TIMEZONE))
-MEETING_STRFTIME = config(section=SECTION_KEY_FF, key="strftime", default=f'%Y.%m.%d - %I.%M %p {DEFAULT_TIMEZONE}')
-MEETING_FILENAME_FORMAT = config(section=SECTION_KEY_FF, key="filename", default=DEFAULT_FILENAME_FORMAT)
-MEETING_FOLDERNAME_FORMAT = config(section=SECTION_KEY_FF, key="folder", default=DEFAULT_FOLDERNAME_FORMAT)
-MEETING_FILEPATH_REPLACE_OLD = config(section=SECTION_KEY_FF, key="filepath_replace_old", default="")
-MEETING_FILEPATH_REPLACE_NEW = config(section=SECTION_KEY_FF, key="filepath_replace_old", default="")
+MEETING_TIMEZONE:Final = ZoneInfo(config(section=SECTION_KEY_FF, key="timezone", default=DEFAULT_TIMEZONE))
+MEETING_STRFTIME:Final = config(section=SECTION_KEY_FF, key="strftime", default=f'%Y.%m.%d - %I.%M %p {DEFAULT_TIMEZONE}')
+MEETING_FILENAME_FORMAT:Final = config(section=SECTION_KEY_FF, key="filename", default=DEFAULT_FILENAME_FORMAT)
+MEETING_FOLDERNAME_FORMAT:Final = config(section=SECTION_KEY_FF, key="folder", default=DEFAULT_FOLDERNAME_FORMAT)
+MEETING_FILEPATH_REPLACE_OLD:Final = config(section=SECTION_KEY_FF, key="filepath_replace_old", default="")
+MEETING_FILEPATH_REPLACE_NEW:Final = config(section=SECTION_KEY_FF, key="filepath_replace_old", default="")
 
 # ----------------------------------------------------
-# Metadata
+# TODO Metadata - remove
 # ----------------------------------------------------
 ksp_metadata = MetadataDB("ksp/metadata/David_Wood_Zoom_Recordings-2022-11-06--2024-11-07 - Meetings.csv")
 
@@ -165,6 +167,7 @@ def load_access_token():
         system.exit(1)
     Console.log(f"Access token loaded successfully.")
 
+
 def handle_graceful_shutdown(signal_received, frame):
     Console.info(f"\nSIGINT or CTRL-C detected. Exiting gracefully.")
     system.exit(0)
@@ -177,16 +180,22 @@ def get_users():
     response = requests.get(url=API_ENDPOINT_USER_LIST, headers=AUTHORIZATION_HEADER)
 
     if not response.ok:
-        Console.error("### Could not retrieve users. Please check if your access token is still valid")
+        Console.error(f"### {response.status_code} Error: Could not retrieve users.")
         Console.log(response)
         system.exit(1)
 
+    Console.bold("Getting user accounts...")
     page_data = response.json()
+
+    if not response.ok:
+        Console.error("### Could not retrieve user accounts. Please check if your access token is still valid")
+        Console.log(response)
+        system.exit(1)
+
     total_pages = int(page_data["page_count"]) + 1
 
     all_users = []
 
-    Console.bold("Getting user accounts")
     Console.log("Fetching data.", end="", flush=True)
     for page in range(1, total_pages):
         url = f"{API_ENDPOINT_USER_LIST}?page_number={str(page)}"
@@ -229,14 +238,25 @@ def make_download_info_for(meeting: dict) -> list:
             recording_type = recording_file.get("file_type")
 
         download_url = f"{recording_file['download_url']}?access_token={ACCESS_TOKEN}"
+
+        file_extension = recording_file.get("file_extension").lower()
+
+        duration_minutes = -1
+        if file_extension == "mp4" or file_extension == "m4a":
+            start_time_utc = parser.parse(recording_file["recording_start"]).replace(tzinfo=timezone.utc)
+            end_time_utc = parser.parse(recording_file["recording_end"]).replace(tzinfo=timezone.utc)
+            duration_minutes = (end_time_utc - start_time_utc).total_seconds() / 60
+
         download_info.append({
             "file_type": file_type,
-            "file_extension": recording_file.get("file_extension"),
+            "file_extension": file_extension,
             "download_url": download_url,
             "recording_type": recording_type,
             "id": recording_file.get("id"),
-            "file_size": recording_file.get("file_size")
+            "file_size": recording_file.get("file_size"),
+            "duration_minutes": duration_minutes
         })
+
     return download_info
 
 
@@ -269,6 +289,8 @@ def get_meetings_for(user_id):
     Console.log() # Move to the next line
     return recordings
 
+error_count = 1
+max_errors = 5
 
 def download_meeting_file(download_url, filename, folder_name, recording_size):
     dl_dir = os.path.join(DOWNLOAD_DIRECTORY, folder_name)
@@ -277,7 +299,8 @@ def download_meeting_file(download_url, filename, folder_name, recording_size):
     full_filename = os.path.join(sanitized_download_dir, sanitized_filename)
     os.makedirs(sanitized_download_dir, exist_ok=True)
 
-    Console.log(f"Destination file: {full_filename} ({recording_size} bytes)")
+    Console.log(f"Downloading file: {full_filename} ({recording_size} bytes)")
+
 
     # Check to see if we have already downloaded this file, and if it is complete.
     downloaded_file_size = 0
@@ -290,14 +313,25 @@ def download_meeting_file(download_url, filename, folder_name, recording_size):
     # Download recording file.
     response = requests.get(download_url, stream=True)
     if not response.ok:
-        Console.error(f"Download failed with status code: {response.status_code}")
+        global error_count
+        Console.error(f"Download attempt {error_count} failed with status code: {response.status_code}")
         if response.status_code == 401:
-            Console.error("Unauthorized: Check your access token.")
+            Console.error(f"Unauthorized: problem with access token?")
+            error_count += 1
+            if error_count <= max_errors:
+                Console.error(f"Reloading access token and retrying download...")
+                load_access_token()
+                download_meeting_file(download_url, filename, folder_name, recording_size)
+            else:
+                Console.error("Too many 401 errors. Aborting script.", bold=True)
+                system.exit(1)
         elif response.status_code == 404:
             Console.error("File not found: The URL may be incorrect.")
         else:
             Console.error(f"Unexpected error: {response.reason}")
         return False
+
+
     # total size in bytes.
     content_length = int(response.headers.get("content-length", 0))
     block_size = 32 * 1024  # 32 Kilobytes
@@ -496,6 +530,7 @@ def main():
             meeting_time = meeting.get("start_time", "Unknown Time")
             Console.bold(f"\n{first_name} {last_name} ({email}) meeting {index_meetings}/{len(meetings)}: {meeting_topic}/{meeting_id}/{meeting_time}")
 
+
             # --- TODO switch strategy for filtering meetings ---
             if should_ignore_meeting_alternate_strategy(meeting):
                 Console.warn("Ignoring meeting!")
@@ -523,11 +558,19 @@ def main():
                     f"==> {BEHAVIOUR_MODE_VERB} file {file_number}/{len(meeting_download_info)}: type={recording_file['recording_type']}, dest={filename}")
 
                 if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
+
                     if download_meeting_file(download_url=recording_file["download_url"],
                                           filename=filename,
                                           folder_name=folder_name,
                                           recording_size=recording_file["file_size"]):
                         Console.green(f"File {file_number}/{num_files_to_download} has been downloaded.")
+
+                        if filename.endswith(".mp4") or filename.endswith(".m4a"):
+                            duration_minutes = recording_file["duration_minutes"]
+                            if duration_minutes <= MINIMUM_DURATION:
+                                Console.warn(
+                                    f"Meeting duration ({duration_minutes:.2f} min) is less than or equal to minimum ({MINIMUM_DURATION} min).")
+                                ksp_metadata.mark_as_short(meeting, duration_minutes)
 
                         num_files_downloaded += 1
 
