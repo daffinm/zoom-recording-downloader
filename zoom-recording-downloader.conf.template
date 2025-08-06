@@ -16,7 +16,8 @@
         "end_date": ""
 	},
 	"Behaviour": {
-	    "mode": "download|size"
+	    "mode": "download|size",
+        "min_duration_warning": 30
 	},
     "UserFilter": {
         "emails_to_include": [],

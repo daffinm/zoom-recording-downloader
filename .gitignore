@@ -5,6 +5,7 @@
 /.archive/
 /ksp/metadata/
 /test/media/
+/test/ignore/
 /tmp/
 __pycache__/
 /downloadsv2/
