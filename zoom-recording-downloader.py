@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# QU
+
 # TODO Check that README.md is accurate in terms of defaults.
 # TODO Test that all the defaults work ok if minimal config is given.
 
