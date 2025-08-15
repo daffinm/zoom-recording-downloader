@@ -23,6 +23,7 @@ class CsvFile:
         FOLDER_NAME = 'Folder_Name'
         BASE_FILENAME = 'Base_Filename'
         NOTES = 'Notes'
+        ZOOM_FILE_COUNT = 'Zoom_File_Count'
 
     class Values:
         YES = "YES"
@@ -307,4 +308,15 @@ class MetadataDB:
     def save(self):
         self.metadata_file.to_csv(self.filepath, index=False)
         Console.blue(f"Metadata file saved to {self.filepath}")
+
+    def add_zoom_file_count(self, zoom_meeting_data:dict, file_count:int):
+        zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
+        matching_meeting = self._find_meeting(zoom_meeting_wrapper)
+
+        if not matching_meeting.empty:
+            idx = matching_meeting.index[0]
+            self.metadata_file.loc[idx, CsvFile.Columns.ZOOM_FILE_COUNT] = file_count
+        else:
+            raise ValueError(
+                f"Cannot add zoom file count for meeting. Meeting ID=[{zoom_meeting_wrapper.id}], start_time={zoom_meeting_wrapper.start_time} not found in metadata.")
 

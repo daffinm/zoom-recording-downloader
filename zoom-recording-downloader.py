@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-# QU
-
 # TODO Check that README.md is accurate in terms of defaults.
 # TODO Test that all the defaults work ok if minimal config is given.
 
@@ -38,7 +36,7 @@ import tqdm as progress_bar
 
 # Local imports
 from lib.console import Console
-from meeting_metadata import MetadataDB
+from ksp.lib.meeting_metadata import MetadataDB
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Configuration
@@ -453,6 +451,10 @@ def format_filename_alternate_strategy(meeting: dict, recording_file: dict) -> (
     day = meeting_time_local.strftime("%d")
     meeting_time = meeting_time_local.strftime(MEETING_STRFTIME)
 
+    # New: add recording_type for non-media files, because some of these share a common file extension
+    if file_extension not in ["mp4", "m4a", "m3u8"]:
+        file_extension = f"{recording_type}.{file_extension}"
+
     # ------------------------------------------------------------------------------------------------------------------
     # New variables used in the format strings from ksp meeting metadata
     #  FIXME check for nan indicating that the metadata is not available for this meeting.
@@ -532,7 +534,6 @@ def main():
             meeting_time = meeting.get("start_time", "Unknown Time")
             Console.bold(f"\n{first_name} {last_name} ({email}) meeting {index_meetings}/{len(meetings)}: {meeting_topic}/{meeting_id}/{meeting_time}")
 
-
             # --- TODO switch strategy for filtering meetings ---
             if should_ignore_meeting_alternate_strategy(meeting):
                 Console.warn("Ignoring meeting!")
@@ -547,6 +548,12 @@ def main():
             num_files_to_download = len(meeting_download_info)
             num_files_downloaded = 0
             Console.log(f"Found {num_files_to_download} file(s) for this meeting.")
+
+            # TODO save metadata even if in size mode.
+            ksp_metadata.add_zoom_file_count(
+                zoom_meeting_data=meeting,
+                file_count=num_files_to_download
+            )
 
             for file_number, recording_file in enumerate(meeting_download_info, 1):
                 if recording_file["recording_type"] == RECORDING_FILE_INCOMPLETE:
@@ -593,6 +600,7 @@ def main():
         Console.blue(f"\nRecordings saved to: {os.path.abspath(DOWNLOAD_DIRECTORY)}\n")
         ksp_metadata.save()
     else:
+        ksp_metadata.save()
         total_gb = total_bytes / (1024 * 1024 * 1024)
         usage = shutil.disk_usage(DOWNLOAD_DIRECTORY)
         disk_space_gb = usage.free / (1024 * 1024 * 1024)
