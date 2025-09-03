@@ -438,12 +438,12 @@ def format_filename_alternate_strategy(meeting: dict, recording_file: dict) -> (
     # Previous variables used in the format strings
     file_extension = recording_file["file_extension"].lower()
     recording_id = recording_file["id"]
-    recording_type = recording_file["recording_type"]
+    recording_type = recording_file["recording_type"].lower()
 
     invalid_chars_pattern = r'[<>:"/\\|?*\x00-\x1F]'
 
     topic = regex.sub(invalid_chars_pattern, '', meeting["topic"])
-    rec_type = recording_type.replace("_", " ").title()
+    rec_type = recording_type.replace("_", " ").title() # e.g. "shared_screen_with_speaker_view" -> "Shared Screen With Speaker View"
     meeting_time_utc = parser.parse(meeting["start_time"]).replace(tzinfo=timezone.utc)
     meeting_time_local = meeting_time_utc.astimezone(MEETING_TIMEZONE)
     year = meeting_time_local.strftime("%Y")
