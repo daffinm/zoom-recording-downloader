@@ -26,6 +26,7 @@ import re as regex
 from datetime import timezone
 from typing import Final
 from zoneinfo import ZoneInfo
+import urllib.parse
 
 
 # installed libraries
@@ -42,7 +43,9 @@ from ksp.lib.meeting_metadata import MetadataDB
 # Configuration
 # ----------------------------------------------------------------------------------------------------------------------
 APP_VERSION:Final = "4.0 (KSP)"
-API_ENDPOINT_USER_LIST:Final = "https://api.zoom.us/v2/users"
+API_ENDPOINT_BASE:Final = "https://api.zoom.us/v2"
+API_ENDPOINT_USERS:Final = f"{API_ENDPOINT_BASE}/users"
+API_ENDPOINT_MEETINGS:Final = f"{API_ENDPOINT_BASE}/meetings"
 RECORDING_FILE_INCOMPLETE:Final = "incomplete"
 # ----------------------------------------------------
 # Load the configuration file
@@ -88,12 +91,23 @@ END_DATE:Final = parser.parse(config(section=SECTION_KEY_DATE_INTERVAL, key="end
 # ----------------------------------------------------
 BEHAVIOUR_MODE_DOWNLOAD:Final = "download"
 BEHAVIOUR_MODE_SIZE:Final = "size"
-BEHAVIOUR_MODES:Final = [BEHAVIOUR_MODE_DOWNLOAD, BEHAVIOUR_MODE_SIZE]
+BEHAVIOUR_MODE_DELETE:Final = "delete"  # TODO implement deletion mode
+BEHAVIOUR_MODES:Final = [BEHAVIOUR_MODE_DOWNLOAD, BEHAVIOUR_MODE_SIZE, BEHAVIOUR_MODE_DELETE]
 BEHAVIOUR_MODE:Final = config("Behaviour", "mode", BEHAVIOUR_MODE_DOWNLOAD)
 if BEHAVIOUR_MODE not in BEHAVIOUR_MODES:
     Console.error(f"Unknown Behaviour mode: {BEHAVIOUR_MODE}")
     exit(1)
-BEHAVIOUR_MODE_VERB:Final = "Downloading" if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD else "Sizing"
+def behaviour_mode_verb():
+    if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
+        return "Downloading"
+    elif BEHAVIOUR_MODE == BEHAVIOUR_MODE_SIZE:
+        return "Sizing"
+    elif BEHAVIOUR_MODE == BEHAVIOUR_MODE_DELETE:
+        return "Deleting"
+    else:
+        return "Unknown"
+
+BEHAVIOUR_MODE_VERB:Final = behaviour_mode_verb()
 MINIMUM_DURATION:Final = config("Behaviour", "min_duration_warning", 30)  # in minutes
 # ----------------------------------------------------
 # UserFilter: filtering users based on email addresses
@@ -124,7 +138,7 @@ MEETING_FILEPATH_REPLACE_NEW:Final = config(section=SECTION_KEY_FF, key="filepat
 # ----------------------------------------------------
 # TODO Metadata - remove
 # ----------------------------------------------------
-ksp_metadata = MetadataDB("ksp/metadata/David_Wood_Zoom_Recordings-2022-11-06--2024-11-07 - Meetings.csv")
+ksp_metadata = MetadataDB("ksp/metadata/David_Wood_Zoom_Recordings-2022-11-06--2024-11-07 - Meetings v2.csv")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -177,7 +191,7 @@ def get_users():
     """
     Loops through pages and return all users
     """
-    response = requests.get(url=API_ENDPOINT_USER_LIST, headers=AUTHORIZATION_HEADER)
+    response = requests.get(url=API_ENDPOINT_USERS, headers=AUTHORIZATION_HEADER)
 
     if not response.ok:
         Console.error(f"### {response.status_code} Error: Could not retrieve users.")
@@ -198,7 +212,7 @@ def get_users():
 
     Console.log("Fetching data.", end="", flush=True)
     for page in range(1, total_pages):
-        url = f"{API_ENDPOINT_USER_LIST}?page_number={str(page)}"
+        url = f"{API_ENDPOINT_USERS}?page_number={str(page)}"
         user_data = requests.get(url=url, headers=AUTHORIZATION_HEADER).json()
         users = ([
             (
@@ -279,7 +293,7 @@ def get_meetings_for(user_id):
              "to": end.strftime('%Y-%m-%d')
         }
         response = requests.get(
-            f"{API_ENDPOINT_USER_LIST}/{user_id}/recordings",
+            f"{API_ENDPOINT_USERS}/{user_id}/recordings",
             headers=AUTHORIZATION_HEADER,
             params=post_data
         )
@@ -363,6 +377,29 @@ def download_meeting_file(download_url, filename, folder_name, recording_size):
         return False
 
 
+def delete_meeting_recording_file(meeting_id, recording_id):
+    """
+    Deletes a specific recording file from a Zoom meeting.
+    Returns True if successful, False otherwise.
+
+    curl 'https://api.zoom.us/v2/meetings/atsXxhSEQWit9t+U02HXNQ==/recordings/a2f19f96-9294-4f51-8134-6f0eea108eb2?action=delete' \
+  --request DELETE \
+  --header 'Authorization: Bearer YOUR_SECRET_TOKEN'
+
+    """
+    url = f"{API_ENDPOINT_MEETINGS}/{meeting_id}/recordings/{recording_id}?action=trash"
+    response = requests.delete(url, headers=AUTHORIZATION_HEADER)
+    if response.status_code == 204:
+        return True
+    elif response.status_code == 401:
+        # Token expired or invalid, reload and retry once
+        load_access_token()
+        response = requests.delete(url, headers=AUTHORIZATION_HEADER)
+        if response.status_code == 204:
+            return True
+    Console.error(f"Failed to delete recording file {recording_id}: {response.status_code} {response.text}")
+    return False
+
 def should_ignore_user(email: str) -> bool:
     if USER_FILTER_INCLUDE and not any(fnmatch.fnmatch(email, pattern) for pattern in USER_FILTER_INCLUDE):
         # Ignore if filter is defined and user email does not match any patterns
@@ -421,7 +458,8 @@ def format_filename(meeting: dict, recording_file: dict) -> (str, str):
 # Alternate Strategies for filtering meetings and formatting file names
 # ----------------------------------------------------------------------------------------------------------------------
 def should_ignore_meeting_alternate_strategy(meeting: dict) -> bool:
-    return ksp_metadata.should_ignore_meeting(zoom_meeting_data=meeting)
+    behaviour_mode_delete = BEHAVIOUR_MODE == BEHAVIOUR_MODE_DELETE
+    return ksp_metadata.should_ignore_meeting(zoom_meeting_data=meeting, behaviour_mode_delete=behaviour_mode_delete)
 
 
 def format_filename_alternate_strategy(meeting: dict, recording_file: dict) -> (str, str):
@@ -498,11 +536,15 @@ def main():
     splash_screen()
 
     # --- Prompt user to continue ---
-    behaviour_message = f"Behaviour mode is '{BEHAVIOUR_MODE}': " + (
-        f"Meeting files will be downloaded to: {DOWNLOAD_DIRECTORY}"
-        if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD
-        else "Total size of download will be calculated."
-    )
+    behaviour_message = f"Behaviour mode is '{BEHAVIOUR_MODE}': "
+
+    if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
+        behaviour_message += f"Meeting files will be downloaded to: {DOWNLOAD_DIRECTORY}"
+    elif BEHAVIOUR_MODE == BEHAVIOUR_MODE_DELETE:
+        behaviour_message += "Meetings marked for deletion will be deleted."
+    else:
+        behaviour_message += "Total size of download will be calculated."
+
     Console.bold(behaviour_message)
     try:
         input("Press Enter to continue, or Ctrl+C to abort? ")
@@ -545,6 +587,12 @@ def main():
                 Console.warn("No recording files found for this meeting. Skipping.")
                 continue
 
+            if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DELETE:
+                if not ksp_metadata.should_delete_meeting(zoom_meeting_data=meeting):
+                    Console.warn("Meeting not marked for deletion. Skipping.")
+                    continue
+
+
             num_files_to_download = len(meeting_download_info)
             num_files_downloaded = 0
             Console.log(f"Found {num_files_to_download} file(s) for this meeting.")
@@ -560,7 +608,7 @@ def main():
                     Console.warn(f"### Recording file is incomplete, skipping.")
                     continue
 
-                # --- ToDO switch strategy for naming files and folders ---
+                # --- TODO switch strategy for naming files and folders HERE ---
                 folder_name, filename = format_filename_alternate_strategy(meeting=meeting, recording_file=recording_file)
 
                 Console.log(
@@ -568,6 +616,8 @@ def main():
 
                 if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
 
+                    download_url = recording_file["download_url"]
+                    recording_id = recording_file["id"]
                     if download_meeting_file(download_url=recording_file["download_url"],
                                           filename=filename,
                                           folder_name=folder_name,
@@ -591,7 +641,17 @@ def main():
                     else:
                         Console.error(f"File {file_number}/{num_files_to_download} could not be downloaded.")
                         # TODO? ksp_metadata.mark_as_failed(meeting)
-                else:
+
+                elif BEHAVIOUR_MODE == BEHAVIOUR_MODE_DELETE:
+                    if ksp_metadata.should_delete_meeting(zoom_meeting_data=meeting):
+                        Console.error("### Deleting meeting file...")
+                        meeting_uuid = meeting["uuid"]
+                        encoded_uuid = urllib.parse.quote_plus(meeting_uuid)
+                        recording_id = recording_file["id"]
+                        if delete_meeting_recording_file(meeting_id=encoded_uuid, recording_id=recording_id):
+                            Console.green(f"Recording file {recording_id} deleted successfully.")
+                            # ksp_metadata.mark_as_deleted(meeting, recording_id)
+                else:  # Sizing mode
                     total_bytes += recording_file["file_size"]
 
 
@@ -599,7 +659,9 @@ def main():
     if BEHAVIOUR_MODE == BEHAVIOUR_MODE_DOWNLOAD:
         Console.blue(f"\nRecordings saved to: {os.path.abspath(DOWNLOAD_DIRECTORY)}\n")
         ksp_metadata.save()
-    else:
+    elif BEHAVIOUR_MODE == BEHAVIOUR_MODE_DELETE:
+        Console.blue(f"\nMeetings marked for deletion have been processed.\n")
+    else:  # Sizing mode
         ksp_metadata.save()
         total_gb = total_bytes / (1024 * 1024 * 1024)
         usage = shutil.disk_usage(DOWNLOAD_DIRECTORY)

@@ -20,6 +20,7 @@ class CsvFile:
         GROUP_ID = 'Group_ID'
         ACTION = 'Action'
         DOWNLOADED = 'Downloaded'
+        DELETED_FROM_ZOOM = 'Deleted_from_Zoom'
         FOLDER_NAME = 'Folder_Name'
         BASE_FILENAME = 'Base_Filename'
         NOTES = 'Notes'
@@ -29,6 +30,7 @@ class CsvFile:
         YES = "YES"
         NO = "NO"
         DELETE = 'Delete'
+        DONE = 'Done'
         IGNORE = 'Ignore'
 
     @staticmethod
@@ -261,21 +263,36 @@ class MetadataDB:
         return metadata
 
 
-    def should_ignore_meeting(self, zoom_meeting_data:dict) -> bool:
+    def should_ignore_meeting(self, zoom_meeting_data:dict, behaviour_mode_delete:bool) -> bool:
+        zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
+        matching_meetings = self._find_meeting(zoom_meeting_wrapper)
+        row = MetadataDB.Row(matching_meetings)
+
+        Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: Checking ignore/delete status.")
+
+        if row.empty:
+            Console.warn("Ignore because NO metadata found.")
+            return True
+        if row.action == CsvFile.Values.IGNORE:
+            Console.warn("Ignore because Action = Ignore.")
+            return True
+        if row.action == CsvFile.Values.DELETE and not behaviour_mode_delete:
+            Console.warn("Ignore because Action = Delete (and not in delete mode).")
+            return True
+        Console.warn("Not ignoring meeting.")
+        return False
+
+    def should_delete_meeting(self, zoom_meeting_data:dict) -> bool:
         zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
         matching_meetings = self._find_meeting(zoom_meeting_wrapper)
         row = MetadataDB.Row(matching_meetings)
 
         if row.empty:
             Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: No metadata found.")
-            return True
-        if row.action == CsvFile.Values.IGNORE or row.action == CsvFile.Values.DELETE:
+            return False
+        if row.action == CsvFile.Values.DONE or row.action == CsvFile.Values.DELETE:
             Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: Action={row.action}")
             return True
-        # This means we can delete files from disk after uploading them and then move on to the next batch.
-        # if row.downloaded == CsvFile.Values.YES:
-        #     Console.warn(f"Meeting ID=[{zoom_meeting_wrapper.id}] Topic=[{zoom_meeting_wrapper.topic}]: Downloaded={row.downloaded}")
-        #     return True
 
         return False
 
@@ -292,6 +309,18 @@ class MetadataDB:
         else:
             raise ValueError(
                 f"Cannot mark as downloaded. Meeting ID=[{zoom_meeting_wrapper.id}], start_time={zoom_meeting_wrapper.start_time} not found in metadata.")
+
+
+    # def mark_as_deleted(self, zoom_meeting_data:dict):
+    #     zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
+    #     matching_meeting = self._find_meeting(zoom_meeting_wrapper)
+    #
+    #     if not matching_meeting.empty:
+    #         idx = matching_meeting.index[0]
+    #         self.metadata_file.loc[idx, CsvFile.Columns.DELETED_FROM_ZOOM] = CsvFile.Values.YES
+    #     else:
+    #         raise ValueError(
+    #             f"Cannot mark as DELETED. Meeting ID=[{zoom_meeting_wrapper.id}], start_time={zoom_meeting_wrapper.start_time} not found in metadata.")
 
     def mark_as_short(self, zoom_meeting_data:dict, duration_minutes:float):
         zoom_meeting_wrapper = ZoomMeetingWrapper(zoom_meeting_data)
